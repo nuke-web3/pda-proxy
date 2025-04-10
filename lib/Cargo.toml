@@ -1,0 +1,14 @@
+[package]
+name = "chacha-lib"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chacha20.workspace = true
+rand = { version = "0.9", default-features = false, optional = true, features = [
+  "os_rng",
+] }
+
+[features]
+default = ["std"]
+std = ["rand/os_rng"]

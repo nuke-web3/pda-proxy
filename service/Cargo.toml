@@ -1,0 +1,36 @@
+[package]
+name = "pda-proxy"
+default-run = "chacha"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "chacha"
+path = "src/bin/main.rs"
+
+[[bin]]
+name = "vkey"
+path = "src/bin/vkey.rs"
+
+[dependencies]
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+clap = { version = "4.0", features = ["derive", "env"] }
+tracing = "0.1.40"
+serde.workspace = true
+sp1-sdk.workspace = true
+hex.workspace = true
+sha2.workspace = true
+dotenv.workspace = true
+anyhow.workspace = true
+celestia-types.workspace = true
+jsonrpsee.workspace = true
+tokio.workspace = true
+
+chacha-lib = { workspace = true, features = ["std"] }
+
+[build-dependencies]
+sp1-build = "4.0.0"

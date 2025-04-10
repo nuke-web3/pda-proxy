@@ -1,0 +1,30 @@
+[[language]]
+name = "rust"
+formatter = { command = "rustfmt", args = ["+nightly"] }
+auto-format = false
+
+[language-server.rust-analyzer]
+# Map the VS Code linkedProjects setting.
+linkedProjects = ["program-chacha/Cargo.toml", "service/Cargo.toml"]
+
+[language-server.rust-analyzer.config]
+checkOnSave = "false"
+check.overrideCommand = [
+  "cargo", "clippy",
+  "--workspace",
+  "--message-format=json",
+  "--all-features",
+  "--all-targets",
+  "--",
+  "-A", "incomplete-features"
+]
+# Disable the unresolved proc macro diagnostic.
+# diagnostics.disabled = ["unresolved-proc-macro"]
+
+[language-server.rust-analyzer.runnables]
+extraEnv = { RUST_LOG = "debug", RUSTFLAGS = "-Ctarget-cpu=native" }
+extraArgs = ["--release", "+nightly"]
+
+[language-server.rust-analyzer.cargo]
+buildScripts.enable = false
+procMacro.enable = false

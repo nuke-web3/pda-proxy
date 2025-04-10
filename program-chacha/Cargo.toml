@@ -1,0 +1,10 @@
+[package]
+name = "chacha-program"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sha2.workspace = true
+sp1-zkvm.workspace = true
+
+chacha-lib.workspace = true
