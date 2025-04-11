@@ -4,17 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-# clap = { version = "4.0", features = ["derive", "env"] }
-tracing = "0.1.40"
 serde.workspace = true
-dotenv.workspace = true
 anyhow.workspace = true
 celestia-types.workspace = true
 jsonrpsee.workspace = true
 tokio.workspace = true
-
-zkvm-common = { workspace = true, features = ["std"] }
-
-[build-dependencies]
-sp1-build = "4.0.0"
+hyper = { workspace = true, features = ["http1", "server"] }
+hyper-util = { workspace = true, features = ["tokio"] }

@@ -1,55 +1,61 @@
-mod rpc;
-use celestia_types::blob::RawBlob;
-use rpc::state::{StateClient, StateServer, StateServerImpl};
-use rpc::tx_config::TxConfig;
-use std::net::SocketAddr;
+#![deny(warnings)]
 
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::Server;
+use hyper::{server::conn::http1, service::service_fn};
+use hyper_util::rt::TokioIo;
+use std::net::SocketAddr;
+use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // tracing_subscriber::FmtSubscriber::builder()
-    // 	.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-    // 	.try_init()
-    // 	.expect("setting default subscriber failed");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let in_addr: SocketAddr = ([127, 0, 0, 1], 3001).into();
+    let out_addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
 
-    let server_addr = run_server().await?;
-    let url = format!("https://{}", server_addr);
+    let out_addr_clone = out_addr;
 
-    let client = HttpClientBuilder::default().build(&url)?;
-    client
-        .state_submit_pay_for_blob(
-            vec![RawBlob {
-                namespace_id: todo!(),
-                data: todo!(),
-                share_version: todo!(),
-                namespace_version: todo!(),
-                signer: todo!(),
-            }],
-            TxConfig {
-                signer_address: todo!(),
-                key_name: todo!(),
-                gas_price: todo!(),
-                gas: todo!(),
-                fee_granter_address: todo!(),
-            },
-        )
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(in_addr).await?;
 
-    Ok(())
-}
+    println!("Listening on http://{}", in_addr);
+    println!("Proxying on http://{}", out_addr);
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-    let server = Server::builder().build("127.0.0.1:0").await?;
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
 
-    let addr = server.local_addr()?;
-    let handle = server.start(StateServerImpl.into_rpc());
+        let service = service_fn(move |mut req| {
+            let uri_string = format!(
+                "http://{}{}",
+                out_addr_clone,
+                req.uri()
+                    .path_and_query()
+                    .map(|x| x.as_str())
+                    .unwrap_or("/")
+            );
+            let uri = uri_string.parse().unwrap();
+            *req.uri_mut() = uri;
 
-    // In this example we don't care about doing shutdown so let's it run forever.
-    // You may use the `ServerHandle` to shut it down or manage it yourself.
-    tokio::spawn(handle.stopped());
+            let host = req.uri().host().expect("uri has no host");
+            let port = req.uri().port_u16().unwrap_or(80);
+            let addr = format!("{}:{}", host, port);
 
-    Ok(addr)
+            async move {
+                let client_stream = TcpStream::connect(addr).await.unwrap();
+                let io = TokioIo::new(client_stream);
+
+                let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
+                tokio::task::spawn(async move {
+                    if let Err(err) = conn.await {
+                        println!("Connection failed: {:?}", err);
+                    }
+                });
+
+                sender.send_request(req).await
+            }
+        });
+
+        tokio::task::spawn(async move {
+            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                println!("Failed to serve the connection: {:?}", err);
+            }
+        });
+    }
 }

@@ -3790,14 +3790,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "celestia-types",
- "dotenv",
+ "hyper",
+ "hyper-util",
  "jsonrpsee",
  "serde",
- "serde_json",
- "sp1-build",
  "tokio",
- "tracing",
- "zkvm-common",
 ]
 
 [[package]]
@@ -5506,19 +5503,12 @@ dependencies = [
 name = "sp1-util"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "celestia-types",
  "clap",
  "dotenv",
  "hex",
- "jsonrpsee",
- "serde",
- "serde_json",
  "sha2 0.10.8",
  "sp1-build",
  "sp1-sdk",
- "tokio",
- "tracing",
  "zkvm-common",
 ]
 

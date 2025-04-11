@@ -25,6 +25,8 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 celestia-types = "0.11"
 dotenv = "0.15"
+hyper = "1.6"
+hyper-util = "0.1"
 
 [patch.crates-io]
 sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
