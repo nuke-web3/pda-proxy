@@ -3,7 +3,7 @@ sp1_zkvm::entrypoint!(main);
 
 use sha2::{Digest, Sha256};
 
-use chacha_lib::chacha;
+use zkvm_common::chacha;
 
 pub fn main() {
     let key = sp1_zkvm::io::read_vec(); // 32 bytes

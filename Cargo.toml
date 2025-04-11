@@ -1,5 +1,5 @@
 [workspace]
-members = ["service", "program-chacha", "lib"]
+members = ["service", "zkVM/common", "zkVM/sp1", "zkVM/sp1/program-chacha"]
 default-members = ["service"]
 resolver = "3"
 
@@ -12,7 +12,7 @@ homepage = "https://celestia.org"
 repository = "https://github.com/celestiaorg/eq-service"
 
 [workspace.dependencies]
-chacha-lib = { path = "lib", default-features = false , version = "0.1.0"}
+zkvm-common = { path = "zkVM/common", default-features = false , version = "0.1.0"}
 
 anyhow = "1.0"
 hex = "0.4"

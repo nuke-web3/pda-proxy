@@ -1,13 +1,25 @@
 [package]
-name = "pda-proxy"
+name = "sp1-util"
+default-run = "cli"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "vkey"
+path = "src/bin/vkey.rs"
+
 [dependencies]
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-# clap = { version = "4.0", features = ["derive", "env"] }
+clap = { version = "4.0", features = ["derive", "env"] }
 tracing = "0.1.40"
 serde.workspace = true
+sp1-sdk.workspace = true
+hex.workspace = true
+sha2.workspace = true
 dotenv.workspace = true
 anyhow.workspace = true
 celestia-types.workspace = true

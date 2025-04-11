@@ -1138,20 +1138,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
-name = "chacha-lib"
-version = "0.1.0"
-dependencies = [
- "chacha20",
- "rand 0.9.0",
-]
-
-[[package]]
 name = "chacha-program"
 version = "0.1.0"
 dependencies = [
- "chacha-lib",
  "sha2 0.10.8",
  "sp1-zkvm",
+ "zkvm-common",
 ]
 
 [[package]]
@@ -3798,18 +3790,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "celestia-types",
- "chacha-lib",
- "clap",
  "dotenv",
- "hex",
  "jsonrpsee",
  "serde",
  "serde_json",
- "sha2 0.10.8",
  "sp1-build",
- "sp1-sdk",
  "tokio",
  "tracing",
+ "zkvm-common",
 ]
 
 [[package]]
@@ -5515,6 +5503,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "celestia-types",
+ "clap",
+ "dotenv",
+ "hex",
+ "jsonrpsee",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "sp1-build",
+ "sp1-sdk",
+ "tokio",
+ "tracing",
+ "zkvm-common",
+]
+
+[[package]]
 name = "sp1-zkvm"
 version = "4.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7070,4 +7078,12 @@ dependencies = [
  "sha2 0.10.8",
  "sha3",
  "subtle",
+]
+
+[[package]]
+name = "zkvm-common"
+version = "0.1.0"
+dependencies = [
+ "chacha20",
+ "rand 0.9.0",
 ]

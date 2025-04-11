@@ -17,17 +17,29 @@ env-settings := "./.env"
 sp1up-path := shell("which sp1up")
 cargo-prove-path := shell("which cargo-prove")
 
-# Pass SP1 just commands
-sp1 *args:
-    @just --justfile ./zkVM/sp1/justfile {{ args }}
-
 # Install SP1 tooling & more
 initial-config-installs:
-    @just sp1 initial-config-installs
+    #!/usr/bin/env bash
+    if ! {{ path_exists(sp1up-path) }}; then
+        curl -L https://sp1.succinct.xyz | bash
+    fi
+    echo "✅ sp1up installed"
+
+    if ! {{ path_exists(cargo-prove-path) }}; then
+        {{ sp1up-path }}
+    else
+        echo -e "✅ cargo-prove installed\n     ⚠️👀NOTE: Check you have the correct version needed for this project!"
+    fi
 
 _pre-build:
     #!/usr/bin/env bash
-    echo TODO
+    if ! {{ path_exists(cargo-prove-path) }}; then
+        echo -e "⛔ Missing zkVM Compiler.\nRun `just initial-config-installs` to prepare your environment"
+        exit 1
+    fi
+    if ! {{ path_exists(zkvm-elf-path) }}; then
+        cargo prove build -p chacha-program
+    fi
 
 _pre-run:
     #!/usr/bin/env bash

@@ -7,4 +7,4 @@ edition.workspace = true
 sha2.workspace = true
 sp1-zkvm.workspace = true
 
-chacha-lib.workspace = true
+zkvm-common.workspace = true

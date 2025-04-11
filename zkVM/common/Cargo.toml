@@ -1,5 +1,5 @@
 [package]
-name = "chacha-lib"
+name = "zkvm-common"
 version.workspace = true
 edition.workspace = true
 

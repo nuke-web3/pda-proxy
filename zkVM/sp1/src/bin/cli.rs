@@ -1,21 +1,9 @@
-//! An end-to-end example of using the SP1 SDK to generate a proof of a program that can be executed
-//! or have a core proof generated.
-//!
-//! You can run this script using the following command:
-//! ```shell
-//! RUST_LOG=info cargo run --release -- --execute
-//! ```
-//! or
-//! ```shell
-//! RUST_LOG=info cargo run --release -- --prove
-//! ```
-
 use clap::Parser;
 use hex::FromHex;
 use sha2::{Digest, Sha256};
 use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
 
-use chacha_lib::chacha;
+use zkvm_common::chacha;
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const CHACHA_ELF: &[u8] = include_elf!("chacha-program");
@@ -59,11 +47,11 @@ fn main() {
     .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
     stdin.write_slice(&key);
 
-    let nonce: [u8; 12] = chacha_lib::random_nonce();
+    let nonce: [u8; 12] = zkvm_common::random_nonce();
     stdin.write_slice(&nonce);
 
     // TODO: replace example bytes with service interface
-    let input_plaintext: &[u8] = chacha_lib::INPUT_BYTES;
+    let input_plaintext: &[u8] = zkvm_common::INPUT_BYTES;
     stdin.write_slice(input_plaintext);
 
     let client = ProverClient::from_env();
@@ -82,17 +70,17 @@ fn main() {
         let input_plaintext_digest = Sha256::digest(input_plaintext);
         println!(
             "Input -> plaintext hash: 0x{}",
-            chacha_lib::bytes_to_hex(&input_plaintext_digest)
+            zkvm_common::bytes_to_hex(&input_plaintext_digest)
         );
         println!(
             "zkVM -> plaintext hash: 0x{}",
-            chacha_lib::bytes_to_hex(output_hash_plaintext)
+            zkvm_common::bytes_to_hex(output_hash_plaintext)
         );
 
         let ciphertext_digest = Sha256::digest(output_ciphertext);
         println!(
             "zkVM -> ciphertext hash: 0x{}",
-            chacha_lib::bytes_to_hex(&ciphertext_digest)
+            zkvm_common::bytes_to_hex(&ciphertext_digest)
         );
 
         // NOTE: stream cipher is decrypted by running the chacha encryption again.
