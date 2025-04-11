@@ -12,12 +12,9 @@ alias br := build-release
 alias f := fmt
 alias c := clean
 
-zkvm-elf-path := "./target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
 env-settings := "./.env"
-sp1up-path := shell("which sp1up")
-cargo-prove-path := shell("which cargo-prove")
 
-# Pass SP1 just commands
+# SP1 just recipies
 sp1 *args:
     @just --justfile ./zkVM/sp1/justfile {{ args }}
 
@@ -98,7 +95,9 @@ fmt:
 # Build & open Rustdocs for the workspace
 doc:
     RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo +nightly doc --no-deps --workspace
-    xdg-open {{ justfile_directory() }}/target/doc/index.html
+    firefox {{ justfile_directory() }}/target/doc/index.html
+    # TODO fix snadbox issues with flatpak
+    # xdg-open {{ justfile_directory() }}/target/doc/index.html
 
 # Launch a local Celestia testnet: Mocha
 mocha:
