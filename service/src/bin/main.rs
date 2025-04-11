@@ -56,7 +56,7 @@ fn main() {
     let key = <[u8; 32]>::from_hex(
         std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
     )
-    .expect("Key must be 32 bytes");
+    .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
     stdin.write_slice(&key);
 
     let nonce: [u8; 12] = chacha_lib::random_nonce();

@@ -1,14 +1,9 @@
-# Exclude build artifacts
 target/
-
-# Exclude Git metadata
 .git
 .gitignore
-
-# Exclude local editor/IDE files
 .vscode/
 .idea/
-
-# Exclude OS-specific files
 .DS_Store
-
+*.log
+# Exclude sensitive data
+.env

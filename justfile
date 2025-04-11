@@ -16,7 +16,6 @@ zkvm-elf-path := "./target/elf-compilation/riscv32im-succinct-zkvm-elf/release/c
 env-settings := "./.env"
 sp1up-path := shell("which sp1up")
 cargo-prove-path := shell("which cargo-prove")
-websocat-path := shell("which cargo-prove")
 
 # Install SP1 tooling & more
 initial-config-installs:
@@ -61,15 +60,7 @@ run-debug *FLAGS: _pre-build _pre-run
     #!/usr/bin/env bash
     set -a  # Auto export vars
     source {{ env-settings }}
-    # Check node up with https://github.com/vi/websocat?tab=readme-ov-file#from-source
-    if ! {{ path_exists(websocat-path) }}; then
-        echo -e "⛔ Missing websocat tool.\nRun `cargo install websocat` to install"
-        exit 1
-    fi
-    if ! echo "ping" | websocat $CELESTIA_NODE_WS -1 -E &> /dev/null ; then
-        echo -e "⛔ Node not avalible @ $CELESTIA_NODE_WS - start a mocha one locally with 'just mocha' "
-        exit 1
-    fi
+    # TODO :Check node up with some healthcheck endpoint
 
     # export CELESTIA_NODE_AUTH_TOKEN=$(celestia light auth admin --p2p.network mocha)
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
