@@ -70,7 +70,7 @@ podman-build:
 podman-run:
     #!/usr/bin/env bash
     set -a  # Auto export vars
-    source .env
+    source {{ env-settings }}
     mkdir -p $PDA_DB_PATH
     podman run --rm -it -v $PDA_DB_PATH:$PDA_DB_PATH --env-file {{ env-settings }} --env RUST_LOG=pda_proxy=debug --network=host -p $PDA_PORT:$PDA_PORT pda-proxy
 
@@ -108,3 +108,10 @@ mocha:
 # Setup and print to stdout, needs to be set in env to be picked up by pda-proxy
 mocha-local-auth:
     celestia light auth admin --p2p.network mocha
+
+# Test proxy
+curl:
+    #!/usr/bin/env bash
+    set -a  # Auto export vars
+    source {{ env-settings }}
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_AUTH_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001

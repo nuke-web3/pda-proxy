@@ -5,9 +5,10 @@ edition.workspace = true
 
 [dependencies]
 serde.workspace = true
-anyhow.workspace = true
+serde_json.workspace = true
 celestia-types.workspace = true
 jsonrpsee.workspace = true
 tokio.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio"] }
+http-body-util.workspace = true
