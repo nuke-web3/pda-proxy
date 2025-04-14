@@ -27,25 +27,25 @@ async fn main() -> Result<()> {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
 
-        let service = service_fn(move |mut plarintext_req: Request<IncomingBody>| {
+        let service = service_fn(move |mut plaintext_req: Request<IncomingBody>| {
             let uri_string = format!(
                 "http://{}{}",
                 out_addr.clone(),
-                plarintext_req
+                plaintext_req
                     .uri()
                     .path_and_query()
                     .map(|x| x.as_str())
                     .unwrap_or("/")
             );
             let uri = uri_string.parse().unwrap();
-            *plarintext_req.uri_mut() = uri;
+            *plaintext_req.uri_mut() = uri;
 
-            let host = plarintext_req.uri().host().expect("uri has no host");
-            let port = plarintext_req.uri().port_u16().unwrap_or(80);
+            let host = plaintext_req.uri().host().expect("uri has no host");
+            let port = plaintext_req.uri().port_u16().unwrap_or(80);
             let addr = format!("{}:{}", host, port);
 
             async move {
-                let encrypted_req = intercept_request_and_encrypt(plarintext_req).await.unwrap();
+                let encrypted_req = intercept_request_and_encrypt(plaintext_req).await.unwrap();
                 let client_stream = TcpStream::connect(addr).await.unwrap();
                 let io = TokioIo::new(client_stream);
 
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
 ///
 /// ### NOTE:
 ///
-/// Presently we need to wait for the full request body to be recived, and fully serialize it.
+/// Presently we need to wait for the full request body to be received, and fully serialize it.
 /// This isn't optimal... but functional
 async fn intercept_request_and_encrypt(req: Request<IncomingBody>) -> Result<Request<BoxBody>> {
     let (mut parts, body) = req.into_parts();

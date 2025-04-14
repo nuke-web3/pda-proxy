@@ -16,7 +16,7 @@ pub fn main() {
     // ## Note
     // The EVM has KECCAK256 opcode (Solidity `keccak256()`)
     // KECCAK256 = 30 gas base & per 32 bytes word = 6 gas
-    // So SHA3 is most performat to choose for EVM.
+    // So SHA3 is most performant to choose for EVM.
     //
     // BUT the cycle count is significantly higher for SHA3 (even accelerated)
     // so we choose to use SHA2, for slightly higher on chain verification gas costs.

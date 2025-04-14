@@ -1,9 +1,9 @@
 # Private DA Middleware Proxy
 
 > ⚠
-> ***NOTICE***
+> **_NOTICE_**
 > Work in Progress!
-> NOT ready for use!
+> NOT ready for use!/
 > ⚠
 
 ### TODO
@@ -15,7 +15,7 @@
 
 ---
 
-A [Celestia](https://celestia.org) client for the [`Blob` and `State` JSON RPC namespaces](https://node-rpc-docs.celestia.org/) enabling sensitive data to be ***verifiably encrypted*** before submission on the (public) network, and enable decryption on retrieval.
+A [Celestia](https://celestia.org) client for the [`Blob` and `State` JSON RPC namespaces](https://node-rpc-docs.celestia.org/) enabling sensitive data to be **_verifiably encrypted_** before submission on the (public) network, and enable decryption on retrieval.
 Non-sensitive calls are unmodified.
 
 Verifiable encryption is enabled via an [SP1 Zero Knowledge Proof (ZKP)](https://docs.succinct.xyz/docs/sp1/what-is-a-zkvm).
@@ -31,7 +31,7 @@ Verifiable encryption is enabled via an [SP1 Zero Knowledge Proof (ZKP)](https:/
 At time of writing, as it should be possible to change these limitations:
 
 - Assumes that there is a single blob per transaction, no logic to handle multiple blobs.
-- Verifiable Encryption is ***one-at-a-time***, and takes ***minutes to complete each request***.
+- Verifiable Encryption is **_one-at-a-time_**, and takes **_minutes to complete each request_**.
   - If the service is processing a job, it will respond with `busy` and (may?) add that to a queue.
   - {Other proxy calls should still be responsive}
 
@@ -39,7 +39,6 @@ Possible to change these, but requires upstream involvement:
 
 - [Max blob size on Celestia](https://docs.celestia.org/how-to-guides/submit-data#maximum-blob-size) is presently ~2MB
 - Upstream jsonrpsee en/decryption middleware feature into lumina?
-
 
 ## Architecture
 
@@ -94,20 +93,30 @@ The PDA proxy depends on a connection to:
 
 1. Celestia Data Availability (DA) Node to:
    - Submit and retrieve (verifiable encrypted) blob data.
-1. (Optional) [Succinct's prover network](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network) as a provider to generate Zero-Knowledge Proofs (ZKPs) of data existing on Celestia.
+1. (Optional) [Succinct prover network](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network) as a provider to generate Zero-Knowledge Proofs (ZKPs) of data existing on Celestia.
    _See the [ZKP program](TODO) for details on what is proven._
 
 ## Interact
 
-Any JSON RPC client will do.
+First you need to [configure](#configure) your environment and nodes.
 
-***TODO: add examples***
-- <https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia>
-- <https://docs.celestia.org/tutorials/rust-client-tutorial>
+Then any HTTP1 client works to send [Celestial JSON RPC](https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia) calls to the proxy:
+
+```sh
+# Proxy running on 127.0.0.1:3001
+# See: <https://mocha.celenium.io/blob?commitment=S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA=&hash=AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=&height=4499999>
+
+source .env
+curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_AUTH_TOKEN" -X POST \
+     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Get", "params": [ 4499999, "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=", "S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA="] }' \
+     127.0.0.1:3001
+```
+
+Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides/submit-data#api) to build around a PDA proxy.
 
 ## Operate
 
-***TODO: notice on single job at a time***
+**_TODO: notice on single job at a time_**
 
 - single GPU 100% used per job
 - presently no way to scale on multi-GPU
@@ -165,7 +174,7 @@ _Don't forget you need to [configure your environment](#configure)_.
 First, some tooling is required:
 
 1. Rust & Cargo - [install instructions](https://www.rust-lang.org/tools/install)
-1. Succinct's SP1 zkVM Toolchain - [install instructions](https://docs.succinct.xyz/docs/sp1/getting-started/install)
+1. SP1 zkVM Toolchain - [install instructions](https://docs.succinct.xyz/docs/sp1/getting-started/install)
 1. Protocol Buffers (Protobuf) compiler - [official examples](https://github.com/hyperium/tonic/tree/master/examples#examples) contain install instructions
 1. (Optional) Just - a modern alternative to `make` [installed](https://just.systems/man/en/packages.html)
 1. TODO NVIDIA compiler & containers <https://docs.succinct.xyz/docs/sp1/generating-proofs/hardware-acceleration#software-requirements>
@@ -235,5 +244,6 @@ The images are built and published for [releases](https://github.com/celestiaorg
 ## Acknowledgments
 
 Based heavily on:
-- https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/proc_macro.rs
-- https://github.com/eigerco/lumina/tree/main/rpc
+
+- <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/proc_macro.rs>
+- <https://github.com/eigerco/lumina/tree/main/rpc>
