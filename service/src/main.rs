@@ -1,21 +1,23 @@
+use anyhow::Result;
 use celestia_types::Blob;
 use http_body_util::{BodyExt, Full};
 use hyper::{
-    body::{Buf, Bytes, Incoming as IncomingBody}, server::conn::http1, service::service_fn, Request, Response
+    Request, Response,
+    body::{Buf, Bytes, Incoming as IncomingBody},
+    server::conn::http1,
+    service::service_fn,
 };
 use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
-use anyhow::{anyhow, Result};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type BoxBody = http_body_util::combinators::BoxBody<Bytes, GenericError>;
 
-
 #[derive(serde::Deserialize)]
 struct ParamsGet {
     blobs: Vec<Blob>,
-    _tx_config: serde_json::Value
+    _tx_config: serde_json::Value,
 }
 
 #[tokio::main]
@@ -63,8 +65,7 @@ async fn main() -> Result<()> {
                 });
 
                 let response = sender.send_request(wrapped_req).await?;
-                let wrapped_resp = outbound_handler(response, request_method
-                ).await?;
+                let wrapped_resp = outbound_handler(response, request_method).await?;
                 anyhow::Ok(wrapped_resp)
             }
         });
@@ -77,36 +78,43 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Introspect a JSON RPC request and (conditionally) mutate it to enable encryption and decryption.
+/// Introspect a JSON RPC request and (conditionally) mutate it to encrypt before forwarding to the downstream node.
+/// Set `request_method` as a hook for [outbound_handler] to use.
 ///
 /// ### NOTE:
 ///
 /// Presently we need to wait for the full request body to be received,
 /// and fully serialize and deserialize it even if not needed.
 /// This isn't optimal... but functional.
-async fn inbound_handler(req: Request<IncomingBody>, request_method: &mut String) -> Result<Request<BoxBody>> {
+async fn inbound_handler(
+    req: Request<IncomingBody>,
+    request_method: &mut String,
+) -> Result<Request<BoxBody>> {
     let (mut parts, body_stream) = req.into_parts();
     let body_complete = body_stream.collect().await?.aggregate();
 
     let body_json: serde_json::Value = serde_json::from_reader(body_complete.reader())?;
 
     if let Some(method) = body_json.get("method").and_then(|m| m.as_str()) {
-        // Set a hook for outbound handler
-        *request_method = method.to_string(); 
+        *request_method = method.to_string();
 
         match method {
             // <https://node-rpc-docs.celestia.org/#blob.Submit>
             "blob.Submit" => {
                 println!("blob.Submit intercept");
-                let params_raw= body_json.get("params").ok_or(anyhow!("`blob.Get` Invalid JSON params"))?;
-                dbg!(&params_raw);
-                let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
-                for blob in params.blobs {
-                    dbg!(blob);
+                if let Some(params_raw) = body_json.get("params") {
+                    dbg!(&params_raw);
+                    let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
+                    for blob in params.blobs {
+                    // TODO: Encrypt data via SP1
+                    // TODO: Submit encrypted blob + anchor(s) + proof that attests to it all
+                        dbg!(blob);
+                    }
+                } else {
+                    println!("Forwarding `blob.Submit` error");
                 }
             }
-            &_ => {},
-
+            &_ => {}
         }
     }
 
@@ -124,41 +132,52 @@ async fn inbound_handler(req: Request<IncomingBody>, request_method: &mut String
     Ok(Request::from_parts(parts, new_body))
 }
 
-/// Introspect a JSON RPC request and (conditionally) mutate it to enable encryption and decryption.
-///
+/// Introspect a JSON RPC response and (conditionally) mutate it by decrypting data before returning to the original client.
+/// Requires a `request_method` typically set in [inbound_handler].
+/// 
 /// ### NOTE:
 ///
 /// Presently we need to wait for the full request body to be received,
 /// and fully serialize and deserialize it even if not needed.
 /// This isn't optimal... but functional.
-async fn outbound_handler(resp: Response<IncomingBody>, request_method: String) -> Result<Response<BoxBody>> {
+async fn outbound_handler(
+    resp: Response<IncomingBody>,
+    request_method: String,
+) -> Result<Response<BoxBody>> {
     let (mut parts, body_stream) = resp.into_parts();
     let body_complete = body_stream.collect().await?.aggregate();
 
     let body_json: serde_json::Value = serde_json::from_reader(body_complete.reader())?;
 
-        match request_method.as_str() {
-            // <https://node-rpc-docs.celestia.org/#blob.Get>
-            "blob.Get" => {
-                println!("blob.Get intercept");
-                let result_raw= body_json.get("result").ok_or(anyhow!("`blob.Get` missing \"result\" from upstream node"))?;
+    match request_method.as_str() {
+        // <https://node-rpc-docs.celestia.org/#blob.Get>
+        "blob.Get" => {
+            println!("blob.Get intercept");
+            if let Some(result_raw) = body_json.get("result") {
                 dbg!(&result_raw);
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
+                // TODO: SP1 Verify encryption & anchors proof, Decrypt data 
+                // TODO: Return {custom?} error and/or decrypted data 
                 dbg!(blob);
+            } else {
+                println!("Forwarding `blob.Get` error");
             }
-            // <https://node-rpc-docs.celestia.org/#blob.Get>
-            "blob.GetAll" => {
-                println!("blob.GetAll intercept");
-                let result_raw= body_json.get("result").ok_or(anyhow!("`blob.Get` missing \"result\" from upstream node"))?;
+        }
+        // <https://node-rpc-docs.celestia.org/#blob.Get>
+        "blob.GetAll" => {
+            println!("blob.GetAll intercept");
+            if let Some(result_raw) = body_json.get("result") {
                 dbg!(&result_raw);
                 let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
                 for blob in blobs {
                     dbg!(blob);
                 }
+            } else {
+                println!("Forwarding `blob.GetAll` error");
             }
-            &_ => {},
-
         }
+        &_ => {}
+    }
 
     let json = serde_json::to_string(&body_json)?;
 
