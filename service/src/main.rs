@@ -11,6 +11,12 @@ use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 
+mod internal;
+use internal::job::*;
+use internal::runner::*;
+use internal::util::*;
+////////////////////////////////////////////////////////////////////////////////
+
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type BoxBody = http_body_util::combinators::BoxBody<Bytes, GenericError>;
 
@@ -22,6 +28,9 @@ struct ParamsGet {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // TODO setup runner;
+    let runner = PdaRunner::new(todo!(), todo!(), todo!(), todo!(), todo!(), todo!());
+
     let in_addr: SocketAddr = ([127, 0, 0, 1], 3001).into();
     let out_addr: SocketAddr = ([127, 0, 0, 1], 26658).into();
 
@@ -106,8 +115,8 @@ async fn inbound_handler(
                     dbg!(&params_raw);
                     let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
                     for blob in params.blobs {
-                    // TODO: Encrypt data via SP1
-                    // TODO: Submit encrypted blob + anchor(s) + proof that attests to it all
+                        // TODO: Encrypt data via SP1
+                        // TODO: Submit encrypted blob + anchor(s) + proof that attests to it all
                         dbg!(blob);
                     }
                 } else {
@@ -134,7 +143,7 @@ async fn inbound_handler(
 
 /// Introspect a JSON RPC response and (conditionally) mutate it by decrypting data before returning to the original client.
 /// Requires a `request_method` typically set in [inbound_handler].
-/// 
+///
 /// ### NOTE:
 ///
 /// Presently we need to wait for the full request body to be received,
@@ -156,8 +165,8 @@ async fn outbound_handler(
             if let Some(result_raw) = body_json.get("result") {
                 dbg!(&result_raw);
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
-                // TODO: SP1 Verify encryption & anchors proof, Decrypt data 
-                // TODO: Return {custom?} error and/or decrypted data 
+                // TODO: SP1 Verify encryption & anchors proof, Decrypt data
+                // TODO: Return {custom?} error and/or decrypted data
                 dbg!(blob);
             } else {
                 println!("Forwarding `blob.Get` error");
