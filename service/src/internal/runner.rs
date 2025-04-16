@@ -70,7 +70,7 @@ impl PdaRunner {
         &self,
         job: Job,
     ) -> Result<Option<SP1ProofWithPublicValues>, PdaRunnerError> {
-        info!("Received grpc request for: {job:?}");
+        info!("Received request for: {job:?}");
 
         let job_key =
             bincode::serialize(&job).map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
@@ -97,8 +97,8 @@ impl PdaRunner {
                         }
                         Some(retry_status) => {
                             warn!("Job is Retryable Failure, returning status & retrying");
-                            // We retry errors on each call to the gRPC
-                            // for a specific [Job] by seding to the queue
+                            // We retry errors on each call
+                            // for a specific [Job] by sending to the queue
                             match self.send_job_with_new_status(job_key, *retry_status, job) {
                                 Ok(_) => {
                                     return Err(PdaRunnerError::InternalError(format!(

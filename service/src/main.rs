@@ -28,7 +28,8 @@ type BoxBody = http_body_util::combinators::BoxBody<Bytes, GenericError>;
 #[derive(serde::Deserialize)]
 struct ParamsGet {
     blobs: Vec<Blob>,
-    _tx_config: serde_json::Value,
+    #[serde(default)]
+    _tx_config: Option<serde_json::Value>,
 }
 
 #[tokio::main]
@@ -120,7 +121,7 @@ async fn main() -> Result<()> {
             let runner = runner.clone();
             async move {
                 let mut request_method: String = Default::default();
-                let wrapped_req =
+                let maybe_wrapped_req =
                     inbound_handler(plaintext_req, &mut request_method, runner).await?;
 
                 let client_stream = TcpStream::connect(addr).await?;
@@ -132,9 +133,26 @@ async fn main() -> Result<()> {
                     }
                 });
 
-                let response = sender.send_request(wrapped_req).await?;
-                let wrapped_resp = outbound_handler(response, request_method).await?;
-                anyhow::Ok(wrapped_resp)
+                match maybe_wrapped_req {
+                    Some(wrapped_req) => {
+                        let returned = sender.send_request(wrapped_req).await?;
+                        let wrapped_resp = outbound_handler(returned, request_method).await?;
+                        anyhow::Ok(wrapped_resp)
+                    }
+                    None => {
+                        // We don't have a proof completed yet...
+                        let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+                        let new_body = Full::new(Bytes::from(raw_json))
+                            .map_err(|err: std::convert::Infallible| match err {})
+                            .boxed();
+                        let new_response = Response::new(BoxBody::new(new_body));
+
+                        let (mut parts, body) = new_response.into_parts();
+                        parts.status = hyper::StatusCode::BAD_REQUEST;
+                        let response = Response::from_parts(parts, body);
+                        anyhow::Ok(response)
+                    }
+                }
             }
         });
 
@@ -158,11 +176,11 @@ async fn inbound_handler(
     req: Request<IncomingBody>,
     request_method: &mut String,
     pda_runner: Arc<PdaRunner>,
-) -> Result<Request<BoxBody>> {
+) -> Result<Option<Request<BoxBody>>> {
     let (mut parts, body_stream) = req.into_parts();
-    let body_complete = body_stream.collect().await?.aggregate();
-
-    let body_json: serde_json::Value = serde_json::from_reader(body_complete.reader())?;
+    let mut body_buf = body_stream.collect().await?.aggregate();
+    let body_bytes = body_buf.copy_to_bytes(body_buf.remaining());
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
 
     if let Some(method) = body_json.get("method").and_then(|m| m.as_str()) {
         *request_method = method.to_string();
@@ -174,21 +192,25 @@ async fn inbound_handler(
                 if let Some(params_raw) = body_json.get("params") {
                     let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
                     // TODO: consider only allowing one blob and one job on the queue
-                    for blob in params.blobs {
+                    for mut blob in params.blobs {
                         let pda_runner = pda_runner.clone();
-                        tokio::spawn(async move {
-                            let data = blob.data.to_owned();
-                            let input = Input {
-                                data: data.to_owned(),
-                            };
-                            let hash = Sha256::digest(&data);
-                            let anchor = Anchor {
-                                data: hash.as_slice().into(),
-                            };
+                        let data = blob.data.to_owned();
+                        let input = Input {
+                            data: data.to_owned(),
+                        };
+                        let hash = Sha256::digest(&data);
+                        let anchor = Anchor {
+                            data: hash.as_slice().into(),
+                        };
 
-                            let job = Job { anchor, input };
-                            let _ = pda_runner.get_verifiable_encryption(job).await;
-                        });
+                        let job = Job { anchor, input };
+                        if let Some(proof_with_values) =
+                            pda_runner.get_verifiable_encryption(job).await?
+                        {
+                            blob.data = bincode::serialize(&proof_with_values)?;
+                        } else {
+                            return Ok(None);
+                        }
                     }
                 } else {
                     println!("Forwarding `blob.Submit` error");
@@ -209,7 +231,7 @@ async fn inbound_handler(
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
 
-    Ok(Request::from_parts(parts, new_body))
+    Ok(Some(Request::from_parts(parts, new_body)))
 }
 
 /// Introspect a JSON RPC response and (conditionally) mutate it by decrypting data before returning to the original client.
@@ -225,9 +247,9 @@ async fn outbound_handler(
     request_method: String,
 ) -> Result<Response<BoxBody>> {
     let (mut parts, body_stream) = resp.into_parts();
-    let body_complete = body_stream.collect().await?.aggregate();
-
-    let body_json: serde_json::Value = serde_json::from_reader(body_complete.reader())?;
+    let mut body_buf = body_stream.collect().await?.aggregate();
+    let body_bytes = body_buf.copy_to_bytes(body_buf.remaining());
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
 
     match request_method.as_str() {
         // <https://node-rpc-docs.celestia.org/#blob.Get>
