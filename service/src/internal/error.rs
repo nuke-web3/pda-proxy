@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug, Serialize, Deserialize)]
-pub enum PdaServiceError {
+pub enum PdaRunnerError {
     #[error("Service: {0}")]
     InternalError(String),
 

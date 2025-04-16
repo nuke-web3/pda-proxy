@@ -1,4 +1,5 @@
-use crate::internal::error::PdaServiceError;
+use crate::PdaRunnerError;
+
 use serde::{Deserialize, Serialize};
 use sp1_sdk::SP1ProofWithPublicValues;
 
@@ -16,14 +17,14 @@ pub struct Job {
 /// TODO: what should structure be?
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 /// A committment to the input, likley a hash or related fingerprint.
 /// TODO: what should structure be?
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Anchor {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl AsRef<[u8]> for Anchor {
@@ -35,10 +36,8 @@ impl AsRef<[u8]> for Anchor {
 /// Used as a [Job] state machine for the PDA service.
 #[derive(Serialize, Deserialize)]
 pub enum JobStatus {
-    /// A new [Job] has be submitted and is being staged
-    Prerun,
     /// A ZK prover job had been started, awaiting completion
-    LocalZkProofPending(Input),
+    LocalZkProofPending,
     /// A ZK prover job had been requested, awaiting response
     RemoteZkProofPending(SuccNetJobId),
     /// A ZK proof is ready, and the [Job] is complete
@@ -49,14 +48,13 @@ pub enum JobStatus {
     /// A wrapper for any [PdaServiceError], with:
     /// - Option = None                        --> Permanent failure
     /// - Option = Some(\<retry-able status\>) --> Retry is possible, with a JobStatus state to retry with
-    Failed(PdaServiceError, Option<Box<JobStatus>>),
+    Failed(PdaRunnerError, Option<Box<JobStatus>>),
 }
 
 impl std::fmt::Debug for JobStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            JobStatus::Prerun => write!(f, "LocalZkProofPending"),
-            JobStatus::LocalZkProofPending(_) => write!(f, "LocalZkProofPending"),
+            JobStatus::LocalZkProofPending => write!(f, "LocalZkProofPending"),
             JobStatus::RemoteZkProofPending(_) => write!(f, "ZkProofPending"),
             JobStatus::ZkProofFinished(_) => write!(f, "ZkProofFinished"),
             JobStatus::Failed(_, _) => write!(f, "Failed"),
