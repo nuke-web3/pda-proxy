@@ -87,7 +87,7 @@ impl PdaRunner {
 
             match job_status {
                 JobStatus::ZkProofFinished(proof) => {
-                    debug!("Job finished, returning proof");
+                    debug!("Job finished, returning proof from DB");
                     return Ok(Some(proof));
                 }
                 JobStatus::Failed(error, maybe_status) => {

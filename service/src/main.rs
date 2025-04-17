@@ -1,5 +1,6 @@
 use anyhow::Result;
 use celestia_types::Blob;
+use hex::FromHex;
 use http_body_util::{BodyExt, Full};
 use hyper::{
     Request, Response,
@@ -15,7 +16,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{OnceCell, mpsc},
 };
-use hex::FromHex;
 
 mod internal;
 use internal::error::*;
@@ -38,11 +38,10 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     // We check here, and read in internal/runner.rs
-        let _ = <[u8; 32]>::from_hex(
-            std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
-        )
-        .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
-
+    let _ = <[u8; 32]>::from_hex(
+        std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
+    )
+    .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
 
     // let da_node_token = std::env::var("CELESTIA_NODE_AUTH_TOKEN")
     //     .expect("CELESTIA_NODE_AUTH_TOKEN env var required");
@@ -134,7 +133,7 @@ async fn main() -> Result<()> {
 
                 let client_stream = TcpStream::connect(addr).await?;
                 let io = TokioIo::new(client_stream);
-                let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
+                let (mut sender, conn) = hyper::client::conn::http1::handshake::<TokioIo<tokio::net::TcpStream>, BoxBody>(io).await?;
                 tokio::task::spawn(async move {
                     if let Err(err) = conn.await {
                         println!("Connection failed: {:?}", err);
@@ -212,10 +211,17 @@ async fn inbound_handler(
                         };
 
                         let job = Job { anchor, input };
+                        #[allow(unused_assignments)] // mutating `blob` in place
                         if let Some(proof_with_values) =
                             pda_runner.get_verifiable_encryption(job).await?
                         {
-                            blob.data = bincode::serialize(&proof_with_values)?;
+                            let encrypted_data = bincode::serialize(&proof_with_values)?;
+                            let encrypted_blob = Blob::new(
+                                blob.namespace,
+                                encrypted_data,
+                                celestia_types::AppVersion::latest(),
+                            )?;
+                            blob = encrypted_blob;
                         } else {
                             return Ok(None);
                         }
