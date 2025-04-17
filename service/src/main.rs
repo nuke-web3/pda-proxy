@@ -15,6 +15,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{OnceCell, mpsc},
 };
+use hex::FromHex;
 
 mod internal;
 use internal::error::*;
@@ -35,6 +36,13 @@ struct ParamsGet {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    // We check here, and read in internal/runner.rs
+        let _ = <[u8; 32]>::from_hex(
+            std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
+        )
+        .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
+
 
     // let da_node_token = std::env::var("CELESTIA_NODE_AUTH_TOKEN")
     //     .expect("CELESTIA_NODE_AUTH_TOKEN env var required");

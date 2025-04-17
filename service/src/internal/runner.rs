@@ -1,5 +1,6 @@
-use crate::{Job, JobStatus, PdaRunnerError, SP1ProofSetup, SuccNetProgramId};
+use crate::{Job, JobStatus, PdaRunnerError, SP1ProofSetup, SuccNetProgramId, internal::util};
 
+use hex::FromHex;
 use log::{debug, error, info, warn};
 use sha2::Digest;
 use sled::{Transactional, Tree as SledTree};
@@ -72,8 +73,8 @@ impl PdaRunner {
     ) -> Result<Option<SP1ProofWithPublicValues>, PdaRunnerError> {
         info!("Received request for: {job:?}");
 
-        let job_key =
-            bincode::serialize(&job).map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
+        let job_key = bincode::serialize(&job.anchor)
+            .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
 
         // Check DB for finished jobs
         if let Some(proof_data) = self
@@ -343,7 +344,26 @@ impl PdaRunner {
             .await?;
 
         let mut stdin = SP1Stdin::new();
-        stdin.write(&job.input);
+        // Setup the inputs:
+        // - key = 32 bytes
+        // - nonce = 12 bytes (MUST BE UNIQUE - NO REUSE!)
+        // - input_plaintext = bytes to encrypt
+
+        let key = <[u8; 32]>::from_hex(
+            std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
+        )
+        .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
+
+        stdin.write_slice(&key);
+
+        let nonce: [u8; 12] = util::random_nonce();
+        stdin.write_slice(&nonce);
+
+        // TODO: replace example bytes with service interface
+        let input_plaintext: &[u8] = job.input.data.as_slice();
+        stdin.write_slice(input_plaintext);
+
+        debug!("Starting proof: {job:?}");
         let proof = zk_client_handle
             .prove(&proof_setup.pk, &stdin)
             .groth16()
@@ -355,7 +375,7 @@ impl PdaRunner {
                 }
                 PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?;
-
+        debug!("COMPLETE proof: {job:?}");
         Ok(proof)
     }
 

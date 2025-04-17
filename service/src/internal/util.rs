@@ -59,6 +59,14 @@ pub async fn wait_shutdown_signals() {
     }
 }
 
+use rand::{TryRngCore, rngs::OsRng};
+
+pub fn random_nonce() -> [u8; 12] {
+    let mut nonce = [0u8; 12];
+    OsRng.try_fill_bytes(&mut nonce).expect("Rng->buffer");
+    nonce
+}
+
 /// Account for shutdown signals, `ctrl+c`
 ///
 /// TODO: handle OS specific signals
