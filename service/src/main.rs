@@ -256,11 +256,11 @@ async fn outbound_handler(
         "blob.Get" => {
             println!("blob.Get intercept");
             if let Some(result_raw) = body_json.get("result") {
-                dbg!(&result_raw);
+                debug!("{result_raw:?}");
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
                 // TODO: SP1 Verify encryption & anchors proof, Decrypt data
                 // TODO: Return {custom?} error and/or decrypted data
-                dbg!(blob);
+                debug!("{blob:?}");
             } else {
                 println!("Forwarding `blob.Get` error");
             }
@@ -269,10 +269,10 @@ async fn outbound_handler(
         "blob.GetAll" => {
             println!("blob.GetAll intercept");
             if let Some(result_raw) = body_json.get("result") {
-                dbg!(&result_raw);
+                debug!("{result_raw:?}");
                 let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
                 for blob in blobs {
-                    dbg!(blob);
+                    debug!("{blob:?}");
                 }
             } else {
                 println!("Forwarding `blob.GetAll` error");
