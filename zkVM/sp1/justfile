@@ -6,10 +6,10 @@ alias rr := run-release
 alias pv := print-viewkey
 alias b := build-debug
 alias br := build-release
+alias be := build-elf
 alias f := fmt
 alias c := clean
 
-zkvm-elf-path := "./target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
 env-settings := "../../.env"
 sp1up-path := shell("which sp1up")
 cargo-prove-path := shell("which cargo-prove")
@@ -28,14 +28,19 @@ initial-config-installs:
         echo -e "✅ cargo-prove installed\n     ⚠️👀NOTE: Check you have the correct version needed for this project!"
     fi
 
-_pre-build:
+# Build only the ELF for the zkVM program in release mode, includes optimizations
+build-elf:
     #!/usr/bin/env bash
     if ! {{ path_exists(cargo-prove-path) }}; then
         echo -e "⛔ Missing zkVM Compiler.\nRun `just initial-config-installs` to prepare your environment"
         exit 1
     fi
-    if ! {{ path_exists(zkvm-elf-path) }}; then
-        cargo prove build -p chacha-program
+    source {{ env-settings }}
+    if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then
+      echo -e "Can't find ELF at \`$ZK_PROGRAM_ELF_PATH\` .\nAttempting to build it..."
+      # Ensure further that we always build most optimized ELF
+      RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" \
+      cargo prove build -p chacha-program
     fi
 
 _pre-run:
@@ -46,33 +51,33 @@ _pre-run:
     fi
 
 # Run in release mode, with optimizations AND debug logs
-run-release *FLAGS: _pre-build _pre-run
+run-release *FLAGS: build-elf  _pre-run
     #!/usr/bin/env bash
     set -a  # Auto export vars
     source {{ env-settings }}
     RUST_LOG=pda_proxy=debug cargo r -r -- {{ FLAGS }}
 
 # Run in debug mode, with extra pre-checks, no optimizations
-run-debug *FLAGS: _pre-build _pre-run
+run-debug *FLAGS: build-elf  _pre-run
     #!/usr/bin/env bash
     set -a  # Auto export vars
     source {{ env-settings }}
     # TODO :Check node up with some healthcheck endpoint
 
-    # export CELESTIA_NODE_AUTH_TOKEN=$(celestia light auth admin --p2p.network mocha)
+    # export CELESTIA_NODE_WRITE_TOKEN=$(celestia light auth admin --p2p.network mocha)
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
 # Print the zkVM program viewkey (`vkey`)
-print-viewkey *FLAGS: _pre-build _pre-run
+print-viewkey *FLAGS: build-elf  _pre-run
     #!/usr/bin/env bash
     cargo r -r --bin vkey -- {{ FLAGS }}
 
 # Build in debug mode, no optimizations
-build-debug: _pre-build
+build-debug: build-elf 
     cargo b
 
 # Build in release mode, includes optimizations
-build-release: _pre-build
+build-release: build-elf 
     cargo b -r
 
 # Scrub build artifacts
