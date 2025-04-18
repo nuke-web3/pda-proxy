@@ -94,8 +94,9 @@ clean:
 
 # Format source code
 fmt:
-    @cargo fmt
-    @just --quiet --unstable --fmt > /dev/null
+    cargo fmt # *.rs
+    just --quiet --unstable --fmt > /dev/null # justfile
+    taplo format # *.toml
 
 # Build & open Rustdocs for the workspace
 doc:
