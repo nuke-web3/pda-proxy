@@ -117,9 +117,12 @@ curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NOD
      127.0.0.1:26657
 # blob.Submit
 # Note: send "{}" as empty `tx_config` object, so the node uses it's default key to sign & submit to Celestia
+# Also for testing we explicilty allow --insecure
 curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
      --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
-     127.0.0.1:26657
+     https://127.0.0.1:26657 \
+     --insecure -v
+    # ^^^^ DO NOT use insecure TLS in real scenarios!
 ```
 
 Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides/submit-data#api) to build around a PDA proxy.

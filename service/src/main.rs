@@ -8,13 +8,16 @@ use hyper::{
     server::conn::http1,
     service::service_fn,
 };
+use hyper_rustls::HttpsConnectorBuilder;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use log::{debug, error, info};
 use rustls::ServerConfig;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     sync::{OnceCell, mpsc},
 };
 use tokio_rustls::TlsAcceptor;
@@ -80,7 +83,15 @@ async fn main() -> Result<()> {
     let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
 
     info!("Listening on https://{}", service_socket);
-    info!("Proxying on http://{}", da_node_socket);
+    let https_connector = HttpsConnectorBuilder::new()
+        .with_native_roots()?
+        .https_only()
+        .enable_http1()
+        .build();
+
+    info!("Proxying to Celestia on https://{}", da_node_socket);
+    let celesita_client: Client<_, BoxBody> =
+        Client::builder(TokioExecutor::new()).build(https_connector);
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();
@@ -124,6 +135,7 @@ async fn main() -> Result<()> {
         let (stream, _) = listener.accept().await?;
         let tls_acceptor = tls_acceptor.clone();
         let runner = pda_runner.clone();
+        let celestia_client = celesita_client.clone();
 
         tokio::spawn(async move {
             match tls_acceptor.accept(stream).await {
@@ -143,32 +155,17 @@ async fn main() -> Result<()> {
                         let uri = uri_string.parse().unwrap();
                         *plaintext_req.uri_mut() = uri;
 
-                        let host = plaintext_req.uri().host().expect("uri has no host");
-                        let port = plaintext_req.uri().port_u16().unwrap_or(80);
-                        let addr = format!("{}:{}", host, port);
-
                         let runner = runner.clone();
+                        let celestia_client = celestia_client.clone();
+
                         async move {
                             let mut request_method: String = Default::default();
                             let maybe_wrapped_req =
                                 inbound_handler(plaintext_req, &mut request_method, runner).await?;
 
-                            let client_stream = TcpStream::connect(addr).await?;
-                            let io = TokioIo::new(client_stream);
-                            let (mut sender, conn) = hyper::client::conn::http1::handshake::<
-                                TokioIo<tokio::net::TcpStream>,
-                                BoxBody,
-                            >(io)
-                            .await?;
-                            tokio::task::spawn(async move {
-                                if let Err(err) = conn.await {
-                                    error!("Connection failed: {:?}", err);
-                                }
-                            });
-
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
-                                    let returned = sender.send_request(wrapped_req).await?;
+                                    let returned = celestia_client.request(wrapped_req).await?;
                                     let wrapped_resp =
                                         outbound_handler(returned, request_method).await?;
                                     anyhow::Ok(wrapped_resp)
