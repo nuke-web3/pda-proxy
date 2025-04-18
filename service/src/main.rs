@@ -12,7 +12,7 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rustls::ServerConfig;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
@@ -83,15 +83,17 @@ async fn main() -> Result<()> {
     let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
 
     info!("Listening on https://{}", service_socket);
-    let https_connector = HttpsConnectorBuilder::new()
-        .with_native_roots()?
-        .https_only()
-        .enable_http1()
-        .build();
+    let https_builder = HttpsConnectorBuilder::new().with_native_roots()?;
 
-    info!("Proxying to Celestia on https://{}", da_node_socket);
+    let https_or_http_connector = if std::env::var("UNSAFE_HTTP_UPSTREAM").is_ok() {
+        warn!("UNSAFE_HTTP_UPSTREAM — allowing HTTP for upstream Celestia connection!");
+        https_builder.https_or_http().enable_http1().build()
+    } else {
+        info!("Proxying to Celestia securly on https://{}", da_node_socket);
+        https_builder.https_only().enable_http1().build()
+    };
     let celesita_client: Client<_, BoxBody> =
-        Client::builder(TokioExecutor::new()).build(https_connector);
+        Client::builder(TokioExecutor::new()).build(https_or_http_connector);
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();
@@ -143,8 +145,14 @@ async fn main() -> Result<()> {
                     let io = TokioIo::new(tls_stream);
 
                     let service = service_fn(move |mut plaintext_req: Request<IncomingBody>| {
+                        let scheme = if std::env::var("UNSAFE_HTTP_UPSTREAM").is_ok() {
+                            "http"
+                        } else {
+                            "https"
+                        };
                         let uri_string = format!(
-                            "https://{}{}",
+                            "{}://{}{}",
+                            scheme,
                             da_node_socket.clone(),
                             plaintext_req
                                 .uri()
