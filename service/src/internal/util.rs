@@ -1,3 +1,5 @@
+use std::{fs, io};
+
 use log::info;
 use serde::{Deserialize, Serialize};
 use tokio::signal::{
@@ -83,4 +85,32 @@ pub async fn wait_shutdown_signals() {
             info!("Received Ctrl+C.");
         }
     }
+}
+
+// Stolen from https://github.com/rustls/hyper-rustls/blob/main/examples/server.rs
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+/// Load public certificate from file.
+pub fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
+    // Open certificate file.
+    let certfile = fs::File::open(filename)
+        .map_err(|e| map_io_error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = io::BufReader::new(certfile);
+
+    // Load and return certificate.
+    rustls_pemfile::certs(&mut reader).collect()
+}
+
+/// Load private key from file.
+pub fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
+    // Open keyfile.
+    let keyfile = fs::File::open(filename)
+        .map_err(|e| map_io_error(format!("failed to open {}: {}", filename, e)))?;
+    let mut reader = io::BufReader::new(keyfile);
+
+    // Load and return a single private key.
+    rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
+}
+
+pub fn map_io_error(err: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, err)
 }

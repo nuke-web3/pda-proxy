@@ -9,13 +9,15 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
-use log::{debug, info};
+use log::{debug, error, info};
+use rustls::ServerConfig;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{OnceCell, mpsc},
 };
+use tokio_rustls::TlsAcceptor;
 
 mod internal;
 use internal::error::*;
@@ -60,10 +62,25 @@ async fn main() -> Result<()> {
     let queue_db = db.open_tree("queue")?;
     let finished_db = db.open_tree("finished")?;
 
+    // TLS setup
+    // TODO: use real certs and keys!!
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let tls_certs_path = std::env::var("TLS_CERTS_PATH").expect("TLS_CERTS_PATH env var required");
+    let tls_certs = load_certs(&tls_certs_path)?;
+    let tls_key_path = std::env::var("TLS_KEY_PATH").expect("TLS_KEY_PATH env var required");
+    let tls_key = load_private_key(&tls_key_path)?;
     let listener = TcpListener::bind(service_socket).await?;
 
-    println!("Listening on http://{}", service_socket);
-    println!("Proxying on http://{}", da_node_socket);
+    let mut server_config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(tls_certs, tls_key)?;
+
+    // NOTE: we only support http1 in this service presently
+    server_config.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+    let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+    info!("Listening on https://{}", service_socket);
+    info!("Proxying on http://{}", da_node_socket);
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();
@@ -105,71 +122,78 @@ async fn main() -> Result<()> {
 
     loop {
         let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
-
+        let tls_acceptor = tls_acceptor.clone();
         let runner = pda_runner.clone();
-        let service = service_fn(move |mut plaintext_req: Request<IncomingBody>| {
-            let uri_string = format!(
-                "http://{}{}",
-                da_node_socket.clone(),
-                plaintext_req
-                    .uri()
-                    .path_and_query()
-                    .map(|x| x.as_str())
-                    .unwrap_or("/")
-            );
-            let uri = uri_string.parse().unwrap();
-            *plaintext_req.uri_mut() = uri;
 
-            let host = plaintext_req.uri().host().expect("uri has no host");
-            let port = plaintext_req.uri().port_u16().unwrap_or(80);
-            let addr = format!("{}:{}", host, port);
+        tokio::spawn(async move {
+            match tls_acceptor.accept(stream).await {
+                Ok(tls_stream) => {
+                    let io = TokioIo::new(tls_stream);
 
-            let runner = runner.clone();
-            async move {
-                let mut request_method: String = Default::default();
-                let maybe_wrapped_req =
-                    inbound_handler(plaintext_req, &mut request_method, runner).await?;
+                    let service = service_fn(move |mut plaintext_req: Request<IncomingBody>| {
+                        let uri_string = format!(
+                            "https://{}{}",
+                            da_node_socket.clone(),
+                            plaintext_req
+                                .uri()
+                                .path_and_query()
+                                .map(|x| x.as_str())
+                                .unwrap_or("/")
+                        );
+                        let uri = uri_string.parse().unwrap();
+                        *plaintext_req.uri_mut() = uri;
 
-                let client_stream = TcpStream::connect(addr).await?;
-                let io = TokioIo::new(client_stream);
-                let (mut sender, conn) = hyper::client::conn::http1::handshake::<
-                    TokioIo<tokio::net::TcpStream>,
-                    BoxBody,
-                >(io)
-                .await?;
-                tokio::task::spawn(async move {
-                    if let Err(err) = conn.await {
-                        println!("Connection failed: {:?}", err);
-                    }
-                });
+                        let host = plaintext_req.uri().host().expect("uri has no host");
+                        let port = plaintext_req.uri().port_u16().unwrap_or(80);
+                        let addr = format!("{}:{}", host, port);
 
-                match maybe_wrapped_req {
-                    Some(wrapped_req) => {
-                        let returned = sender.send_request(wrapped_req).await?;
-                        let wrapped_resp = outbound_handler(returned, request_method).await?;
-                        anyhow::Ok(wrapped_resp)
-                    }
-                    None => {
-                        // We don't have a proof completed yet...
-                        let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
-                        let new_body = Full::new(Bytes::from(raw_json))
-                            .map_err(|err: std::convert::Infallible| match err {})
-                            .boxed();
-                        let new_response = Response::new(BoxBody::new(new_body));
+                        let runner = runner.clone();
+                        async move {
+                            let mut request_method: String = Default::default();
+                            let maybe_wrapped_req =
+                                inbound_handler(plaintext_req, &mut request_method, runner).await?;
 
-                        let (mut parts, body) = new_response.into_parts();
-                        parts.status = hyper::StatusCode::BAD_REQUEST;
-                        let response = Response::from_parts(parts, body);
-                        anyhow::Ok(response)
+                            let client_stream = TcpStream::connect(addr).await?;
+                            let io = TokioIo::new(client_stream);
+                            let (mut sender, conn) = hyper::client::conn::http1::handshake::<
+                                TokioIo<tokio::net::TcpStream>,
+                                BoxBody,
+                            >(io)
+                            .await?;
+                            tokio::task::spawn(async move {
+                                if let Err(err) = conn.await {
+                                    error!("Connection failed: {:?}", err);
+                                }
+                            });
+
+                            match maybe_wrapped_req {
+                                Some(wrapped_req) => {
+                                    let returned = sender.send_request(wrapped_req).await?;
+                                    let wrapped_resp =
+                                        outbound_handler(returned, request_method).await?;
+                                    anyhow::Ok(wrapped_resp)
+                                }
+                                None => {
+                                    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+                                    let new_body = Full::new(Bytes::from(raw_json))
+                                        .map_err(|err: std::convert::Infallible| match err {})
+                                        .boxed();
+                                    let new_response = Response::new(BoxBody::new(new_body));
+
+                                    let (mut parts, body) = new_response.into_parts();
+                                    parts.status = hyper::StatusCode::BAD_REQUEST;
+                                    let response = Response::from_parts(parts, body);
+                                    anyhow::Ok(response)
+                                }
+                            }
+                        }
+                    });
+
+                    if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                        error!("Failed to serve the connection: {:?}", err);
                     }
                 }
-            }
-        });
-
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                println!("Failed to serve the connection: {:?}", err);
+                Err(e) => error!("TLS handshake failed: {:?}", e),
             }
         });
     }
@@ -199,7 +223,7 @@ async fn inbound_handler(
         match method {
             // <https://node-rpc-docs.celestia.org/#blob.Submit>
             "blob.Submit" => {
-                println!("blob.Submit intercept");
+                debug!("blob.Submit intercept");
                 if let Some(params_raw) = body_json.get("params") {
                     let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
                     // TODO: consider only allowing one blob and one job on the queue
@@ -231,7 +255,7 @@ async fn inbound_handler(
                         }
                     }
                 } else {
-                    println!("Forwarding `blob.Submit` error");
+                    debug!("Forwarding `blob.Submit` error");
                 }
             }
             &_ => {}
@@ -272,7 +296,7 @@ async fn outbound_handler(
     match request_method.as_str() {
         // <https://node-rpc-docs.celestia.org/#blob.Get>
         "blob.Get" => {
-            println!("blob.Get intercept");
+            debug!("blob.Get intercept");
             if let Some(result_raw) = body_json.get("result") {
                 debug!("{result_raw:?}");
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
@@ -280,12 +304,12 @@ async fn outbound_handler(
                 // TODO: Return {custom?} error and/or decrypted data
                 debug!("{blob:?}");
             } else {
-                println!("Forwarding `blob.Get` error");
+                debug!("Forwarding `blob.Get` error");
             }
         }
         // <https://node-rpc-docs.celestia.org/#blob.Get>
         "blob.GetAll" => {
-            println!("blob.GetAll intercept");
+            debug!("blob.GetAll intercept");
             if let Some(result_raw) = body_json.get("result") {
                 debug!("{result_raw:?}");
                 let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
@@ -293,7 +317,7 @@ async fn outbound_handler(
                     debug!("{blob:?}");
                 }
             } else {
-                println!("Forwarding `blob.GetAll` error");
+                debug!("Forwarding `blob.GetAll` error");
             }
         }
         &_ => {}
