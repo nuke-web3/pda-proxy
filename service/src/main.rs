@@ -133,7 +133,11 @@ async fn main() -> Result<()> {
 
                 let client_stream = TcpStream::connect(addr).await?;
                 let io = TokioIo::new(client_stream);
-                let (mut sender, conn) = hyper::client::conn::http1::handshake::<TokioIo<tokio::net::TcpStream>, BoxBody>(io).await?;
+                let (mut sender, conn) = hyper::client::conn::http1::handshake::<
+                    TokioIo<tokio::net::TcpStream>,
+                    BoxBody,
+                >(io)
+                .await?;
                 tokio::task::spawn(async move {
                     if let Err(err) = conn.await {
                         println!("Connection failed: {:?}", err);

@@ -52,7 +52,7 @@ run-debug *FLAGS: _pre-build _pre-run
 
 # Build docker image & tag `pda-proxy`
 docker-build:
-    docker build -t pda-proxy .
+    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag pda-proxy --progress=plain .
 
 # Run a pre-built docker image
 docker-run:
@@ -64,7 +64,7 @@ docker-run:
 
 # Build docker image & tag `pda-proxy`
 podman-build:
-    podman build -t pda-proxy .
+    podman build --layers --tag pda-proxy --log-level=debug .
 
 # Run a pre-built podman image
 podman-run:

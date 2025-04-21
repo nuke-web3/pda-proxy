@@ -1,72 +1,58 @@
-FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 as build-env
+#  Base with Rust, CUDA, SP1, and cargo-chef
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS base-dev
 
-RUN apt-get update \
-  && DEBIAN_FRONTEND=noninteractive \
-  apt-get install --no-install-recommends --assume-yes \
-  curl build-essential pkg-config git ca-certificates \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
+  apt-get install --no-install-recommends -y \
+  curl build-essential pkg-config git ca-certificates gnupg2 \
   && rm -rf /var/lib/apt/lists/*
 
-# Install rustup and the latest stable toolchain
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+# Ensure we cache toolchain & components
+WORKDIR /app
+COPY ./rust-toolchain.toml ./
 
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install SP1 toolchain (this is done early to benefit from caching)
-RUN curl -L https://sp1.succinct.xyz | bash
-RUN /root/.sp1/bin/sp1up
+# https://github.com/LukeMathWalker/cargo-chef/
+RUN cargo install cargo-chef
 
-# FIXME: cargo isn't installed for sp1 correctly otherwise (maybe 1.85-dev related?)
-# RUN rustup update stable
+# https://docs.succinct.xyz/docs/sp1/getting-started/install
+RUN curl -L https://sp1up.succinct.xyz | bash && \
+  /root/.sp1/bin/sp1up
 
 ####################################################################################################
-## Dependency stage: Cache Cargo dependencies via cargo fetch
-####################################################################################################
-FROM build-env AS deps
-
-# TODO: consider using https://github.com/LukeMathWalker/cargo-chef
+FROM base-dev AS planner
 
 WORKDIR /app
-
-# Copy only the Cargo files that affect dependency resolution.
-COPY Cargo.lock Cargo.toml ./
-COPY service/Cargo.toml ./service/
-COPY zkVM/common/Cargo.toml ./zkVM/common/
-COPY zkVM/sp1/Cargo.toml ./zkVM/sp1/
-COPY zkVM/sp1/program-chacha/Cargo.toml ./zkVM/sp1/program-chacha/
-
-# Create dummy targets for each workspace member so that cargo fetch can succeed.
-RUN mkdir -p service/src && echo 'fn main() {}' > service/src/main.rs && \
-  mkdir -p zkVM/common/src && echo 'fn main() {}' > zkVM/common/src/lib.rs && \
-  mkdir -p zkVM/sp1/src && echo 'fn main() {}' > zkVM/sp1/src/main.rs && \
-  mkdir -p zkVM/sp1/program-chacha/src && echo 'fn main() {}' > zkVM/sp1/program-chacha/src/main.rs
-
-# Run cargo fetch so that dependency downloads are cached in the image.
-RUN cargo fetch
-
-####################################################################################################
-## Builder stage: Build the application using cached dependencies
-####################################################################################################
-FROM build-env AS builder
-
-WORKDIR /app
-
-# Import the cached Cargo registry from the deps stage.
-COPY --from=deps /root/.cargo /root/.cargo
 
 COPY . .
 
+RUN cargo chef prepare --recipe-path recipe.json
+
+####################################################################################################
+FROM base-dev AS builder
+
+WORKDIR /app
+COPY --from=planner /app/recipe.json ./
+
+RUN --mount=type=cache,id=target_cache,target=/app/target \
+  cargo chef cook --release --recipe-path recipe.json
+
+COPY . .
+
+# Build SP1 ELF to be proven (with optimizations)
 RUN --mount=type=cache,id=target_cache,target=/app/target \
   /root/.sp1/bin/cargo-prove prove build -p chacha-program
 
+# Build the final binary
 RUN --mount=type=cache,id=target_cache,target=/app/target \
   cargo build --release && \
-  cp /app/target/release/pda-proxy /app/pda-proxy
+  strip /app/target/release/pda-proxy && \
+  cp target/release/pda-proxy /app/pda-proxy # pop out of cache
 
 ####################################################################################################
-## Final stage: Prepare the runtime image
-####################################################################################################
-FROM nvidia/cuda:12.8.1-base-ubuntu24.04
+FROM nvidia/cuda:12.8.1-base-ubuntu24.04 AS runtime
 
-COPY --from=builder /app/pda-proxy ./
+COPY --from=builder /app/pda-proxy /usr/local/bin/pda-proxy
 
-CMD ["/pda-proxy"]
+ENTRYPOINT ["/usr/local/bin/pda-proxy"]
