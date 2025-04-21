@@ -1,41 +1,44 @@
-# First stage: Build environment (based on Rust)
-FROM rust:latest AS build-env
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 as build-env
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive \
   apt-get install --no-install-recommends --assume-yes \
-  protobuf-compiler \
+  curl build-essential pkg-config git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# Install rustup and the latest stable toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install SP1 toolchain (this is done early to benefit from caching)
 RUN curl -L https://sp1.succinct.xyz | bash
 RUN /root/.sp1/bin/sp1up
 
 # FIXME: cargo isn't installed for sp1 correctly otherwise (maybe 1.85-dev related?)
-RUN rustup update stable
+# RUN rustup update stable
 
 ####################################################################################################
 ## Dependency stage: Cache Cargo dependencies via cargo fetch
 ####################################################################################################
 FROM build-env AS deps
 
+# TODO: consider using https://github.com/LukeMathWalker/cargo-chef
+
 WORKDIR /app
 
 # Copy only the Cargo files that affect dependency resolution.
 COPY Cargo.lock Cargo.toml ./
 COPY service/Cargo.toml ./service/
-COPY lib/Cargo.toml ./lib/
-COPY runner-keccak-inclusion/Cargo.toml ./runner-keccak-inclusion/
-COPY blob-tool/Cargo.toml ./blob-tool/
-COPY program-keccak-inclusion/Cargo.toml ./program-keccak-inclusion/
+COPY zkVM/common/Cargo.toml ./zkVM/common/
+COPY zkVM/sp1/Cargo.toml ./zkVM/sp1/
+COPY zkVM/sp1/program-chacha/Cargo.toml ./zkVM/sp1/program-chacha/
 
 # Create dummy targets for each workspace member so that cargo fetch can succeed.
 RUN mkdir -p service/src && echo 'fn main() {}' > service/src/main.rs && \
-  mkdir -p common/src && echo 'fn main() {}' > common/src/lib.rs && \
-  mkdir -p sdk/src && echo 'fn main() {}' > sdk/src/lib.rs && \
-  mkdir -p runner-keccak-inclusion/src && echo 'fn main() {}' > runner-keccak-inclusion/src/main.rs && \
-  mkdir -p blob-tool/src && echo 'fn main() {}' > blob-tool/src/main.rs && \
-  mkdir -p program-keccak-inclusion/src && echo 'fn main() {}' > program-keccak-inclusion/src/main.rs
+  mkdir -p zkVM/common/src && echo 'fn main() {}' > zkVM/common/src/lib.rs && \
+  mkdir -p zkVM/sp1/src && echo 'fn main() {}' > zkVM/sp1/src/main.rs && \
+  mkdir -p zkVM/sp1/program-chacha/src && echo 'fn main() {}' > zkVM/sp1/program-chacha/src/main.rs
 
 # Run cargo fetch so that dependency downloads are cached in the image.
 RUN cargo fetch
@@ -48,35 +51,22 @@ FROM build-env AS builder
 WORKDIR /app
 
 # Import the cached Cargo registry from the deps stage.
-COPY --from=deps /usr/local/cargo /usr/local/cargo
+COPY --from=deps /root/.cargo /root/.cargo
 
-# Now copy the rest of your source code.
 COPY . .
 
-# Build ZK Program ELF using SP1 toolchain.
-# Use BuildKit 
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  /root/.sp1/bin/cargo-prove prove build -p eq-program-keccak-inclusion
+  /root/.sp1/bin/cargo-prove prove build -p chacha-program
 
-# Finally, compile the project in release mode.
 RUN --mount=type=cache,id=target_cache,target=/app/target \
   cargo build --release && \
-  cp /app/target/release/eq-service /app/eq-service
+  cp /app/target/release/pda-proxy /app/pda-proxy
 
 ####################################################################################################
 ## Final stage: Prepare the runtime image
 ####################################################################################################
-FROM debian:bookworm-slim
-# We use bookwork as we need glibc
-# We must have libcurl for the SP1 client to function!
-# FIXME: we don't need to do this, so long as the image we use has updated ca-certs
-# <https://github.com/succinctlabs/sp1/issues/2075#issuecomment-2704953661>
-# RUN apt update && apt install -y libcurl4 && rm -rf /var/lib/apt/lists/*
+FROM nvidia/cuda:12.8.1-base-ubuntu24.04
 
-# Copy system CA certs
-# Without them, prover network requests will fail: <https://github.com/succinctlabs/sp1/issues/2075>
-COPY --from=build-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /app/pda-proxy ./
 
-COPY --from=builder /app/eq-service ./
-
-CMD ["/eq-service"]
+CMD ["/pda-proxy"]
