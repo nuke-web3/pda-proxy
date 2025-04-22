@@ -3,7 +3,7 @@ FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS base-dev
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
   apt-get install --no-install-recommends -y \
-  curl build-essential pkg-config git ca-certificates gnupg2 \
+  docker.io curl build-essential pkg-config git ca-certificates gnupg2 \
   && rm -rf /var/lib/apt/lists/*
 
 # Ensure we cache toolchain & components
@@ -53,6 +53,9 @@ RUN --mount=type=cache,id=target_cache,target=/app/target \
 ####################################################################################################
 FROM nvidia/cuda:12.8.1-base-ubuntu24.04 AS runtime
 
+# SP1 CUDA support needs Docker-in-Docker to run `moongate-server` prover service
+# Internally run on localhost:3000
+COPY --from=base-dev /usr/bin/docker /usr/bin/docker
 COPY --from=builder /app/pda-proxy /usr/local/bin/pda-proxy
 
 ENTRYPOINT ["/usr/local/bin/pda-proxy"]
