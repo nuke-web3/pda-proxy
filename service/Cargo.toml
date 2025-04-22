@@ -24,3 +24,7 @@ sha2.workspace = true
 thiserror.workspace = true
 env_logger.workspace = true
 rand.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+rustls-pemfile.workspace = true
+hyper-rustls = "0.27.5"

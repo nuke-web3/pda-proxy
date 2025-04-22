@@ -12,7 +12,7 @@ alias br := build-release
 alias f := fmt
 alias c := clean
 
-env-settings := "./.env"
+env-settings := ".env"
 
 # SP1 just recipies
 sp1 *args:
@@ -32,6 +32,11 @@ _pre-run:
         echo -e "⛔ Missing required \`{{ env-settings }}\` file.\nCreate one with:\n\n\tcp example.env .env\n\nAnd then edit to adjust settings"
         exit 1
     fi
+    source {{ env-settings }}
+    if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then
+      echo -e "⛔ Missing required \`$ZK_PROGRAM_ELF_PATH\` file.\nAttempting to build it..."
+      just sp1 build-elf
+    fi
 
 # Run in release mode, with optimizations AND debug logs
 run-release *FLAGS: _pre-build _pre-run
@@ -47,7 +52,7 @@ run-debug *FLAGS: _pre-build _pre-run
     source {{ env-settings }}
     # TODO :Check node up with some healthcheck endpoint
 
-    # export CELESTIA_NODE_AUTH_TOKEN=$(celestia light auth admin --p2p.network mocha)
+    # export CELESTIA_NODE_WRITE_TOKEN=$(celestia light auth admin --p2p.network mocha)
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
 # Build docker image & tag `pda-proxy`
@@ -91,8 +96,9 @@ clean:
 
 # Format source code
 fmt:
-    @cargo fmt
-    @just --quiet --unstable --fmt > /dev/null
+    cargo fmt # *.rs
+    just --quiet --unstable --fmt > /dev/null # justfile
+    taplo format # *.toml
 
 # Build & open Rustdocs for the workspace
 doc:
@@ -116,4 +122,4 @@ curl:
     #!/usr/bin/env bash
     set -a  # Auto export vars
     source {{ env-settings }}
-    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_AUTH_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001
