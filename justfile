@@ -57,7 +57,7 @@ run-debug *FLAGS: _pre-build _pre-run
 
 # Build docker image & tag `pda-proxy`
 docker-build:
-    docker build -t pda-proxy .
+    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag pda-proxy --progress=plain .
 
 # Run a pre-built docker image
 docker-run:
@@ -65,11 +65,13 @@ docker-run:
     set -a  # Auto export vars
     source {{ env-settings }}
     mkdir -p $PDA_DB_PATH
-    docker run --rm -it -v $PDA_DB_PATH:$PDA_DB_PATH --env-file {{ env-settings }} --env RUST_LOG=pda_proxy=debug --network=host -p $PDA_PORT:$PDA_PORT pda-proxy
+    # Note socket assumes running "normally" with docker managed by root
+    # TODO: support docker rootless!
+    docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v $PDA_DB_PATH:$PDA_DB_PATH --env-file {{ env-settings }} --env RUST_LOG=pda_proxy=debug --network=host -p $PDA_PORT:$PDA_PORT pda-proxy
 
 # Build docker image & tag `pda-proxy`
 podman-build:
-    podman build -t pda-proxy .
+    podman build --layers --tag pda-proxy --log-level=debug .
 
 # Run a pre-built podman image
 podman-run:
