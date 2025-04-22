@@ -24,10 +24,6 @@ initial-config-installs:
 
 _pre-build:
     #!/usr/bin/env bash
-    echo TODO
-
-_pre-run:
-    #!/usr/bin/env bash
     if ! {{ path_exists(env-settings) }}; then
         echo -e "⛔ Missing required \`{{ env-settings }}\` file.\nCreate one with:\n\n\tcp example.env .env\n\nAnd then edit to adjust settings"
         exit 1
@@ -37,6 +33,10 @@ _pre-run:
       echo -e "⛔ Missing required \`$ZK_PROGRAM_ELF_PATH\` file.\nAttempting to build it..."
       just sp1 build-elf
     fi
+
+_pre-run:
+    #!/usr/bin/env bash
+    echo "just pre-run TODO"
 
 # Run in release mode, with optimizations AND debug logs
 run-release *FLAGS: _pre-build _pre-run
@@ -67,7 +67,16 @@ docker-run:
     mkdir -p $PDA_DB_PATH
     # Note socket assumes running "normally" with docker managed by root
     # TODO: support docker rootless!
-    docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v $PDA_DB_PATH:$PDA_DB_PATH --env-file {{ env-settings }} --env RUST_LOG=pda_proxy=debug --network=host -p $PDA_PORT:$PDA_PORT pda-proxy
+    # FIXME: better way to share files accross .env file!
+    docker run --rm -it \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v ./service/static:/app/static \
+      -v $PDA_DB_PATH:$PDA_DB_PATH \
+      --env-file {{ env-settings }} \
+      --env TLS_CERTS_PATH=/app/static/sample.pem --env TLS_KEY_PATH=/app/static/sample.rsa \
+      --env RUST_LOG=pda_proxy=debug \
+      --network=host -p $PDA_PORT:$PDA_PORT \
+      pda-proxy
 
 # Build docker image & tag `pda-proxy`
 podman-build:
