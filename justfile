@@ -4,6 +4,8 @@ default:
 alias r := run-debug
 alias rr := run-release
 alias db := docker-build
+alias ds := docker-save
+alias dl := docker-load
 alias dr := docker-run
 alias pb := podman-build
 alias pr := podman-run
@@ -13,6 +15,8 @@ alias f := fmt
 alias c := clean
 
 env-settings := ".env"
+artifacts-tar-gz-file := "/tmp/groth-circuits.tar.gz"
+circuit-dir := "$HOME/.sp1/circuits/groth16/$SP1_CIRCUIT_VERSION"
 
 # SP1 just recipies
 sp1 *args:
@@ -58,6 +62,14 @@ run-debug *FLAGS: _pre-build _pre-run
 # Build docker image & tag `pda-proxy`
 docker-build:
     docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag pda-proxy --progress=plain .
+
+# Save docker image to a tar.gz
+docker-save:
+    docker save pda-proxy | gzip > pda-proxy-docker.tar.gz
+
+# Load docker image from tar.gz
+docker-load:
+    gunzip -c pda-proxy-docker.tar.gz | docker load
 
 # Run a pre-built docker image
 docker-run:
@@ -132,3 +144,62 @@ curl:
     set -a  # Auto export vars
     source {{ env-settings }}
     curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001
+
+# Download required groth16 artifacts
+download-groth16-circuit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -x  # start verbose output
+
+    # TODO: don't have to manually upkeep these here if possible!
+    # See <https://github.com/succinctlabs/sp1/blob/dev/crates/sdk/src/install.rs>
+    # might make a mini utility bin for service to manually execute this instead
+    #
+    # Required environment variables:
+    CIRCUIT_ARTIFACTS_URL_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
+    ARTIFACTS_TYPE="groth16"
+    SP1_CIRCUIT_VERSION="v4.0.0-rc.3"
+    CIRCUIT_DIR="$HOME/.sp1/circuits/$ARTIFACTS_TYPE/$SP1_CIRCUIT_VERSION"
+
+    DOWNLOAD_URL="${CIRCUIT_ARTIFACTS_URL_BASE}/${SP1_CIRCUIT_VERSION}-${ARTIFACTS_TYPE}.tar.gz"
+
+    ARTIFACTS_TAR_GZ_FILE={{ artifacts-tar-gz-file }}
+
+    echo "Downloading SP1 circuit files from $DOWNLOAD_URL"
+    curl -# -L "$DOWNLOAD_URL" -o "$ARTIFACTS_TAR_GZ_FILE"
+
+    # Create the build directory
+    mkdir -p "$CIRCUIT_DIR"
+
+    # Extract the tarball into the build directory with extraction progress
+    echo "Extracting to $CIRCUIT_DIR..."
+    tar --checkpoint=100 --checkpoint-action=dot -Pxzf "$ARTIFACTS_TAR_GZ_FILE" -C "$CIRCUIT_DIR"
+
+    # Keep around in case we want to scp this to a docker host
+    # NOTE: assumes /tmp is doing what it should and cleared on restart
+    # rm -f "$ARTIFACTS_TAR_GZ_FILE"
+
+    echo "Downloaded $DOWNLOAD_URL to $CIRCUIT_DIR"
+
+# Extract required groth16 artifacts
+extract-groth16-circuit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -x  # start verbose output
+
+    ARTIFACTS_TYPE="groth16"
+    SP1_CIRCUIT_VERSION="v4.0.0-rc.3"
+    CIRCUIT_DIR="$HOME/.sp1/circuits/$ARTIFACTS_TYPE/$SP1_CIRCUIT_VERSION"
+
+    ARTIFACTS_TAR_GZ_FILE={{ artifacts-tar-gz-file }}
+
+    # Create the build directory
+    mkdir -p "$CIRCUIT_DIR"
+
+    # Extract the tarball into the build directory with extraction progress
+    echo "Extracting to $CIRCUIT_DIR..."
+    tar --checkpoint=100 --checkpoint-action=dot -Pxzf "$ARTIFACTS_TAR_GZ_FILE" -C "$CIRCUIT_DIR"
+
+    rm -f "$ARTIFACTS_TAR_GZ_FILE"
+
+    echo "Downloaded $DOWNLOAD_URL to $CIRCUIT_DIR"

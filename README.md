@@ -168,7 +168,7 @@ cp example.env .env
 # edit .env
 ```
 
-### Running containers
+### Using containers
 
 The images are available:
 
@@ -176,13 +176,46 @@ TODO
 
 ```sh
 # ghcr:
-docker pull ghcr.io/celestiaorg/TODO:latest
+docker pull ghcr.io/celestiaorg/pda-proxy:latest
 
 # Docker hub:
-docker pull celestiaorg/TODO:latest
+docker pull celestiaorg/pda-proxy:latest
 ```
 
 _Don't forget you need to [configure your environment](#configure)_.
+
+#### Setup Container Host
+
+As we don't want to embed huge files, secrets, and dev only example static files, you will need to place them on the host machine in the following paths:
+
+1. Create or use `scp` to copy a good `.env` to `/app/.env` on the host machine (see [config](#configure).
+1. **ONLY for testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
+   - You should use:
+    ```sh
+    TLS_CERTS_PATH=/app/static/sample.pem
+    TLS_KEY_PATH=/app/static/sample.rsa
+    ```
+1. (Optional, highly suggested) Locally download the `groth16` circuits required (~4GB worth of uncompressed data) 
+   1. `just download-groth16-circuit` to download to `artifacts-tar-gz-file := "/tmp/groth-circuits.tar.gz"` and extract it locally.
+   1. Use `scp` or similar to copy the tar file to host machine
+   1. Extract with a similar script to that in the [justfile](./justfile) `extract-groth16-circuit` recipe to `~/.sp1` directory on the host (likely `/root/.sp1`)
+
+#### Running containers
+
+With the correct setup of the host:
+
+```sh
+# RUST_LOG is optional
+docker run -it\
+ -v /var/run/docker.sock:/var/run/docker.sock\
+ -v /root/.sp1:/root/.sp1\
+ -v /app/static:/app/static\
+ -v $PDA_DB_PATH:$PDA_DB_PATH\
+ --env-file /app/.env\
+ --env RUST_LOG=pda_proxy=debug\
+ --network=host\
+ pda-proxy
+```
 
 ## Develop
 
