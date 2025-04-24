@@ -16,7 +16,7 @@ http-body-util.workspace = true
 bincode.workspace = true
 celestia-rpc.workspace = true
 sled.workspace = true
-sp1-sdk.workspace = true
+sp1-sdk = { workspace = true, features = ["native-gnark"] }
 base64.workspace = true
 log.workspace = true
 hex.workspace = true
