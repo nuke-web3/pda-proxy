@@ -31,13 +31,6 @@ use internal::util::*;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type BoxBody = http_body_util::combinators::BoxBody<Bytes, GenericError>;
 
-#[derive(serde::Deserialize)]
-struct ParamsGet {
-    blobs: Vec<Blob>,
-    #[serde(default)]
-    _tx_config: Option<serde_json::Value>,
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -89,7 +82,10 @@ async fn main() -> Result<()> {
         warn!("UNSAFE_HTTP_UPSTREAM — allowing HTTP for upstream Celestia connection!");
         https_builder.https_or_http().enable_http1().build()
     } else {
-        info!("Proxying to Celestia securly on https://{}", da_node_socket);
+        info!(
+            "Proxying to Celestia securely on https://{}",
+            da_node_socket
+        );
         https_builder.https_only().enable_http1().build()
     };
     let celesita_client: Client<_, BoxBody> =
@@ -185,26 +181,45 @@ async fn main() -> Result<()> {
                         let celestia_client = celestia_client.clone();
 
                         async move {
+                            // Must have auth token!
+                            if let Some(auth_value) = plaintext_req.headers().get("authorization") {
+                                let auth_str = auth_value.to_str().unwrap_or("");
+                                if !auth_str.starts_with("Bearer ") {
+                                    return Ok(missing_auth_response());
+                                }
+                            } else {
+                                return Ok(missing_auth_response());
+                            }
+
                             let mut request_method: String = Default::default();
                             let maybe_wrapped_req =
                                 match inbound_handler(plaintext_req, &mut request_method, runner)
                                     .await
                                 {
-                                    Ok(resp) => resp,
-                                    Err(e) => return internal_error_response(e.to_string()),
+                                    Ok(req) => req,
+                                    Err(e) => return Ok(internal_error_response(e.to_string())),
                                 };
 
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
+                                    debug!(
+                                        "Forwarding (maybe modified) `{}` --> DA",
+                                        request_method
+                                    );
                                     let returned = celestia_client.request(wrapped_req).await?;
-                                    let wrapped_resp = outbound_handler(returned, request_method)
-                                        .await
-                                        .unwrap_or_else(|e| {
-                                            internal_error_response(e.to_string()).unwrap()
-                                        });
+                                    let wrapped_resp =
+                                        outbound_handler(returned, request_method.to_owned())
+                                            .await
+                                            .unwrap_or_else(|e| {
+                                                internal_error_response(e.to_string())
+                                            });
+                                    debug!(
+                                        "Responding (maybe modified) `{}` <-- DA",
+                                        request_method
+                                    );
                                     anyhow::Ok(wrapped_resp)
                                 }
-                                None => pending_response(),
+                                None => Ok(pending_response()),
                             }
                         }
                     });
@@ -227,7 +242,7 @@ async fn main() -> Result<()> {
 /// Presently we need to wait for the full request body to be received,
 /// and fully serialize and deserialize it even if not needed.
 /// This isn't optimal... but functional.
-async fn inbound_handler(
+pub async fn inbound_handler(
     req: Request<IncomingBody>,
     request_method: &mut String,
     pda_runner: Arc<PdaRunner>,
@@ -235,65 +250,76 @@ async fn inbound_handler(
     let (mut parts, body_stream) = req.into_parts();
     let mut body_buf = body_stream.collect().await?.aggregate();
     let body_bytes = body_buf.copy_to_bytes(body_buf.remaining());
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    let mut body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
 
     if let Some(method) = body_json.get("method").and_then(|m| m.as_str()) {
         *request_method = method.to_string();
 
+        #[allow(clippy::single_match)]
         match method {
-            // <https://node-rpc-docs.celestia.org/#blob.Submit>
             "blob.Submit" => {
                 debug!("blob.Submit intercept");
-                if let Some(params_raw) = body_json.get("params") {
-                    let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
-                    // TODO: consider only allowing one blob and one job on the queue
-                    for mut blob in params.blobs {
-                        debug!("{blob:?}");
-                        let pda_runner = pda_runner.clone();
-                        let data = blob.data.to_owned();
-                        let input = Input {
-                            data: data.to_owned(),
-                        };
-                        let hash = Sha256::digest(&data);
-                        let anchor = Anchor {
-                            data: hash.as_slice().into(),
-                        };
+                if let Some(params_raw) = body_json.get_mut("params") {
+                    let params_array = params_raw
+                        .as_array_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Expected 'params' to be a JSON array"))?;
 
-                        let job = Job { anchor, input };
-                        #[allow(unused_assignments)] // mutating `blob` in place
-                        if let Some(proof_with_values) =
-                            pda_runner.get_verifiable_encryption(job).await?
-                        {
-                            debug!("{proof_with_values:?}");
-                            let encrypted_data = bincode::serialize(&proof_with_values)?;
-                            let encrypted_blob = Blob::new(
-                                blob.namespace,
-                                encrypted_data.clone(),
-                                celestia_types::AppVersion::latest(),
-                            )?;
-                            debug!("{encrypted_data:?}");
-                            blob = encrypted_blob;
-                        } else {
-                            return Ok(None);
+                    if !params_array.is_empty() {
+                        let blobs_value = params_array
+                            .get_mut(0)
+                            .ok_or_else(|| anyhow::anyhow!("Expected first 'params' entry"))?;
+
+                        let blobs: Vec<Blob> = serde_json::from_value(blobs_value.clone())?;
+
+                        let mut encrypted_blobs = Vec::with_capacity(blobs.len());
+
+                        // TODO: consider only allowing one blob and one job on the queue
+                        for blob in blobs {
+                            let pda_runner = pda_runner.clone();
+                            let data = blob.data.clone();
+
+                            let input = Input { data: data.clone() };
+                            let hash = Sha256::digest(&data);
+                            let anchor = Anchor {
+                                data: hash.as_slice().into(),
+                            };
+
+                            let job = Job { anchor, input };
+
+                            if let Some(proof_with_values) =
+                                pda_runner.get_verifiable_encryption(job).await?
+                            {
+                                debug!("Replacing blob.data with: {proof_with_values:?}");
+
+                                let encrypted_data = bincode::serialize(&proof_with_values)?;
+                                let encrypted_blob = Blob::new(
+                                    blob.namespace,
+                                    encrypted_data,
+                                    celestia_types::AppVersion::latest(),
+                                )?;
+
+                                encrypted_blobs.push(encrypted_blob);
+                            } else {
+                                return Ok(None);
+                            }
                         }
                     }
                 } else {
-                    debug!("Forwarding `blob.Submit` error");
+                    debug!("Forwarding `blob.Submit` error: missing params");
                 }
             }
             &_ => {}
         }
     }
 
-    let json = serde_json::to_string(&body_json)?;
-    debug!("Encrypted JSON: {json:?}");
+    let json_bytes = serde_json::to_vec(&body_json)?;
 
     // MISSION CRITICAL
     // Without it, the request will likely hang or fail,
     // I am assuming it's recalculated if missing, as it works
     parts.headers.remove("content-length");
 
-    let new_body = Full::new(Bytes::from(json))
+    let new_body = Full::new(Bytes::from(json_bytes))
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
 
@@ -362,31 +388,50 @@ async fn outbound_handler(
 }
 
 /// Job is in queue, we are waiting on it to finish
-fn pending_response() -> Result<Response<BoxBody>> {
-    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
-    let new_body = Full::new(Bytes::from(raw_json))
-        .map_err(|err: std::convert::Infallible| match err {})
-        .boxed();
-    let new_response = Response::new(BoxBody::new(new_body));
-
-    let (mut parts, body) = new_response.into_parts();
-    parts.status = hyper::StatusCode::BAD_REQUEST;
-    let response = Response::from_parts(parts, body);
-    anyhow::Ok(response)
+fn pending_response() -> Response<BoxBody> {
+    let raw_json = r#"
+    {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "status": "Verifiable encryption processing... Call back for result"
+        }
+    }"#;
+    new_response_from(raw_json)
 }
 
 /// Map an error String into a JSON response body
-fn internal_error_response(error: String) -> Result<Response<BoxBody>> {
+fn internal_error_response(error: String) -> Response<BoxBody> {
     let raw_json =
         format!("{{ \"id\": 1, \"jsonrpc\": \"2.0\", \"status\": \"Internal Error: {error}\" }}")
-            .to_owned();
-    let new_body = Full::new(Bytes::from(raw_json))
+            .to_string();
+    new_response_from(raw_json.as_str())
+}
+
+/// The upstream node will drop any call without a correct
+/// Bearer: <|Auth|Write|Read JWT> set in the header!
+fn missing_auth_response() -> Response<BoxBody> {
+    warn!("Got Request with missing or malformed Authorization header.");
+    let raw_json = r#"
+    {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "error": {
+            "message": "Missing or malformed Authorization header. Expected format: Bearer <token>"
+        }
+    }"#;
+    new_response_from(raw_json)
+}
+
+fn new_response_from(
+    raw_json: &str,
+) -> Response<http_body_util::combinators::BoxBody<Bytes, GenericError>> {
+    let owned_string = raw_json.to_owned();
+    let new_body = Full::new(Bytes::from(owned_string))
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
-    let new_response = Response::new(BoxBody::new(new_body));
 
-    let (mut parts, body) = new_response.into_parts();
-    parts.status = hyper::StatusCode::INTERNAL_SERVER_ERROR;
-    let response = Response::from_parts(parts, body);
-    anyhow::Ok(response)
+    let mut response = Response::new(BoxBody::new(new_body));
+    *response.status_mut() = hyper::StatusCode::UNAUTHORIZED;
+
+    response
 }
