@@ -67,6 +67,8 @@ impl PdaRunner {
     }
 
     /// The main method: sending a [Job] to this PDA Runner.
+    /// If Job is finished, returns Ok(Some(Proof)),
+    /// or Ok(None) if we don't have one (yet, likely pending)
     pub async fn get_verifiable_encryption(
         &self,
         job: Job,

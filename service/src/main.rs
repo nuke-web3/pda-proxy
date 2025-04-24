@@ -187,27 +187,24 @@ async fn main() -> Result<()> {
                         async move {
                             let mut request_method: String = Default::default();
                             let maybe_wrapped_req =
-                                inbound_handler(plaintext_req, &mut request_method, runner).await?;
+                                match inbound_handler(plaintext_req, &mut request_method, runner)
+                                    .await
+                                {
+                                    Ok(resp) => resp,
+                                    Err(e) => return internal_error_response(e.to_string()),
+                                };
 
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
                                     let returned = celestia_client.request(wrapped_req).await?;
-                                    let wrapped_resp =
-                                        outbound_handler(returned, request_method).await?;
+                                    let wrapped_resp = outbound_handler(returned, request_method)
+                                        .await
+                                        .unwrap_or_else(|e| {
+                                            internal_error_response(e.to_string()).unwrap()
+                                        });
                                     anyhow::Ok(wrapped_resp)
                                 }
-                                None => {
-                                    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
-                                    let new_body = Full::new(Bytes::from(raw_json))
-                                        .map_err(|err: std::convert::Infallible| match err {})
-                                        .boxed();
-                                    let new_response = Response::new(BoxBody::new(new_body));
-
-                                    let (mut parts, body) = new_response.into_parts();
-                                    parts.status = hyper::StatusCode::BAD_REQUEST;
-                                    let response = Response::from_parts(parts, body);
-                                    anyhow::Ok(response)
-                                }
+                                None => pending_response(),
                             }
                         }
                     });
@@ -251,6 +248,7 @@ async fn inbound_handler(
                     let params: ParamsGet = serde_json::from_value(params_raw.clone())?;
                     // TODO: consider only allowing one blob and one job on the queue
                     for mut blob in params.blobs {
+                        debug!("{blob:?}");
                         let pda_runner = pda_runner.clone();
                         let data = blob.data.to_owned();
                         let input = Input {
@@ -266,12 +264,14 @@ async fn inbound_handler(
                         if let Some(proof_with_values) =
                             pda_runner.get_verifiable_encryption(job).await?
                         {
+                            debug!("{proof_with_values:?}");
                             let encrypted_data = bincode::serialize(&proof_with_values)?;
                             let encrypted_blob = Blob::new(
                                 blob.namespace,
-                                encrypted_data,
+                                encrypted_data.clone(),
                                 celestia_types::AppVersion::latest(),
                             )?;
+                            debug!("{encrypted_data:?}");
                             blob = encrypted_blob;
                         } else {
                             return Ok(None);
@@ -286,6 +286,7 @@ async fn inbound_handler(
     }
 
     let json = serde_json::to_string(&body_json)?;
+    debug!("Encrypted JSON: {json:?}");
 
     // MISSION CRITICAL
     // Without it, the request will likely hang or fail,
@@ -358,4 +359,34 @@ async fn outbound_handler(
         .boxed();
 
     Ok(Response::from_parts(parts, new_body))
+}
+
+/// Job is in queue, we are waiting on it to finish
+fn pending_response() -> Result<Response<BoxBody>> {
+    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+    let new_body = Full::new(Bytes::from(raw_json))
+        .map_err(|err: std::convert::Infallible| match err {})
+        .boxed();
+    let new_response = Response::new(BoxBody::new(new_body));
+
+    let (mut parts, body) = new_response.into_parts();
+    parts.status = hyper::StatusCode::BAD_REQUEST;
+    let response = Response::from_parts(parts, body);
+    anyhow::Ok(response)
+}
+
+/// Map an error String into a JSON response body
+fn internal_error_response(error: String) -> Result<Response<BoxBody>> {
+    let raw_json =
+        format!("{{ \"id\": 1, \"jsonrpc\": \"2.0\", \"status\": \"Internal Error: {error}\" }}")
+            .to_owned();
+    let new_body = Full::new(Bytes::from(raw_json))
+        .map_err(|err: std::convert::Infallible| match err {})
+        .boxed();
+    let new_response = Response::new(BoxBody::new(new_body));
+
+    let (mut parts, body) = new_response.into_parts();
+    parts.status = hyper::StatusCode::INTERNAL_SERVER_ERROR;
+    let response = Response::from_parts(parts, body);
+    anyhow::Ok(response)
 }
