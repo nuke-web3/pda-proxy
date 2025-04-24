@@ -1,10 +1,18 @@
-#  Base with Rust, CUDA, SP1, and cargo-chef
+#  Base with Rust, Go, CUDA, SP1, and cargo-chef
 FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS base-dev
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
   apt-get install --no-install-recommends -y \
-  docker.io curl build-essential pkg-config git ca-certificates gnupg2 \
+  clang libclang-dev docker.io curl tar build-essential pkg-config git ca-certificates gnupg2 \
   && rm -rf /var/lib/apt/lists/*
+ 
+ENV GO_VERSION=1.22.0
+ENV GO_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+RUN curl -L --proto '=https' --tlsv1.2 -sSf ${GO_URL} -o go.tar.gz && \
+    mkdir -p /opt/go && \
+    tar -C /opt/go --strip-components=1 -xzf go.tar.gz && \
+    rm go.tar.gz
+ENV PATH="/opt/go/bin:${PATH}"
 
 # Ensure we cache toolchain & components
 WORKDIR /app

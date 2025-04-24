@@ -65,11 +65,11 @@ docker-build:
 
 # Save docker image to a tar.gz
 docker-save:
-    docker save pda-proxy | gzip > pda-proxy-docker.tar.gz
+    docker save pda-proxy | gzip > /tmp/pda-proxy-docker.tar.gz
 
 # Load docker image from tar.gz
 docker-load:
-    gunzip -c pda-proxy-docker.tar.gz | docker load
+    gunzip -c /tmp/pda-proxy-docker.tar.gz | docker load
 
 # Run a pre-built docker image
 docker-run:
