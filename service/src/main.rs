@@ -133,6 +133,24 @@ async fn main() -> Result<()> {
         async move { runner.job_worker(job_receiver).await }
     });
 
+    debug!("Restarting unfinished jobs");
+    for (job_key, queue_data) in queue_db.iter().flatten() {
+        let job: Job = bincode::deserialize(&job_key).unwrap();
+        debug!("Sending {job:?}");
+        if let Ok(job_status) = bincode::deserialize::<JobStatus>(&queue_data) {
+            match job_status {
+                JobStatus::LocalZkProofPending | JobStatus::RemoteZkProofPending(_) => {
+                    let _ = job_sender
+                        .send(Some(job))
+                        .map_err(|e| error!("Failed to send existing job to worker: {}", e));
+                }
+                _ => {
+                    error!("Unexpected job in queue! DB is in invalid state!")
+                }
+            }
+        }
+    }
+
     loop {
         let (stream, _) = listener.accept().await?;
         let tls_acceptor = tls_acceptor.clone();
