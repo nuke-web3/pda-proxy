@@ -37,18 +37,23 @@ echo "✅ Certbot installed."
 # # Stop service temporarily to free port 80
 # echo "⛔ Stopping Docker container: $DOCKER_CONTAINER_NAME (if running)"
 # docker stop "$DOCKER_CONTAINER_NAME" || true
+TLS_EMAIL=you@example.com
+TLS_DOMAIN=your.domain.com
+# NOTE: you must update "your.domain.com" for PATHs below
 
 echo "📡 Requesting certificate for $TLS_DOMAIN"
-sudo certbot certonly --standalone -d "$TLS_DOMAIN" --agree-tos --non-interactive --email "$EMAIL"
+sudo certbot certonly --standalone -d "$TLS_DOMAIN" --agree-tos --non-interactive --email "$TLS_EMAIL"
 
-CERT_PATH="/etc/letsencrypt/live/$TLS_DOMAIN"
-echo "🔐 Certs stored at $CERT_PATH"
+CERTS_PATH="/etc/letsencrypt/live/$TLS_DOMAIN"
+echo "🔐 Certs stored at $CERTS_PATH"
 
 # echo "🚀 Starting Docker container again..."
 # docker start "$DOCKER_CONTAINER_NAME"
 
 # Set up automatic renewal with a post-hook
-RENEW_CMD="certbot renew --quiet --deploy-hook 'docker restart $DOCKER_CONTAINER_NAME'"
+# TODO: are we required to restart with new cert?
+# RENEW_CMD="certbot renew --quiet --deploy-hook 'docker restart $DOCKER_CONTAINER_NAME'"
+RENEW_CMD="certbot renew --quiet"
 
 # NOTE: Assumes systemd
 if command -v systemctl &>/dev/null; then
