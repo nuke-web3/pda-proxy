@@ -117,7 +117,7 @@ curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NOD
      127.0.0.1:26657
 # blob.Submit
 # Note: send "{}" as empty `tx_config` object, so the node uses it's default key to sign & submit to Celestia
-# Also for testing we explicilty allow --insecure
+# Also for testing we explicitly allow --insecure
 curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
      --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
      https://127.0.0.1:26657 \
@@ -184,7 +184,7 @@ docker pull celestiaorg/pda-proxy:latest
 
 _Don't forget you need to [configure your environment](#configure)_.
 
-#### Setup Container Host
+#### Setup Host
 
 As we don't want to embed huge files, secrets, and dev only example static files, you will need to place them on the host machine in the following paths:
 
@@ -199,30 +199,19 @@ As we don't want to embed huge files, secrets, and dev only example static files
       ```
 1. Run [./scripts/init_celestia_docker.sh](./scripts/init_celestia_docker.sh) to initialize a local Celestia Node with persistent storage.
    - Update `.env` to use the correct `CELESTIA_NODE_WRITE_TOKEN`
-1. Startup both the proxy and the celestia node with:
-   ```sh
-   docker compose --env-file /app/.env up -d
-   ```
 
 #### Running containers
 
-With the correct setup of the host, you can :
+With the [correct setup of the host](#setup-host), you can startup both the proxy and local celestia node with:
 
+```sh
+docker compose --env-file /app/.env up -d
+```
 
 Or manually just the proxy itself:
 
 ```sh
-# RUST_LOG is optional
-# Remove /app/static if using real TLS certs!
-docker run -it\
- -v /var/run/docker.sock:/var/run/docker.sock\
- -v /root/.sp1:/root/.sp1\
- -v /app/static:/app/static\
- -v $PDA_DB_PATH:$PDA_DB_PATH\
- --env-file /app/.env\
- --env RUST_LOG=pda_proxy=debug\
- --network=host\
- pda-proxy
+just docker-run
 ```
 
 ## Develop
