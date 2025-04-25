@@ -4,65 +4,74 @@ set -e
 
 # === CONFIGURATION ===
 
-source .env
+source ../.env
 
 # === FUNCTIONS ===
 
 pull_image() {
-  echo "🚀 Pulling Celestia Node image..."
-  docker pull "$DOCKER_IMAGE"
-}
-
-create_data_dir() {
-  echo "📁 Ensuring data directory exists at $DATA_DIR..."
-  mkdir -p "$DATA_DIR"
+  echo "🚀 Pulling $CELESTIA_DOCKER_IMAGE image..."
+  docker pull "$CELESTIA_DOCKER_IMAGE"
 }
 
 initialize_node() {
-  if [ ! -d "$DATA_DIR/$CHAIN_ID" ]; then
-    echo "🔧 Initializing $NODE_TYPE node on $CHAIN_ID..."
+  echo "📁 Check existance of $CELESTIA_DATA_DIR/config.toml" 
+  mkdir -p "$CELESTIA_DATA_DIR"
+  if [ ! -f "$CELESTIA_DATA_DIR/config.toml" ]; then
+    echo "🔧 Initializing $CELESTIA_NODE_TYPE node for $CELESTIA_NETWORK network..."
     docker run --rm \
-      -v "$DATA_DIR:/home/celestia" \
-      "$DOCKER_IMAGE" \
-      celestia "$NODE_TYPE" init --core.ip "" --p2p.network "$CHAIN_ID"
+      --user root \
+      -v "$CELESTIA_DATA_DIR:/home/celestia" \
+      "$CELESTIA_DOCKER_IMAGE" \
+      /bin/celestia "$CELESTIA_NODE_TYPE" init --core.ip "$CELESTIA_NODE_CORE_IP" --p2p.network "$CELESTIA_NETWORK"
   else
-    echo "✅ Node already initialized at $DATA_DIR/$CHAIN_ID"
+    echo "✅ Node already initialized at $CELESTIA_DATA_DIR"
   fi
 }
 
 set_write_jwt() {
-  if [ ! -d "$DATA_DIR/$CHAIN_ID" ]; then
-    echo "Exporting 'write' auth token "
-    export CELESTIA_NODE_WRITE_TOKEN=$(docker run --rm \
-      -v "$DATA_DIR:/home/celestia" \
-      "$DOCKER_IMAGE" \
-      celestia "$NODE_TYPE" light auth write --core.ip "" --p2p.network "$CHAIN_ID")
-    echo "CELESTIA_NODE_WRITE_TOKEN=$CELESTIA_NODE_WRITE_TOKEN"  
-    echo "^^^ save this in '.env' to persist it!"
+  echo "Exporting 'write' auth token "
+  export CELESTIA_NODE_WRITE_TOKEN=$(docker run --rm \
+    --user root \
+    -v "$CELESTIA_DATA_DIR:/home/celestia" \
+    "$CELESTIA_DOCKER_IMAGE" \
+    /bin/celestia "$CELESTIA_NODE_TYPE" auth write)
+  # Trim logs, only keep key
+  CELESTIA_NODE_WRITE_TOKEN=$(echo "$CELESTIA_NODE_WRITE_TOKEN" | tail -n 1)
+}
+
+get_trusted_hash() {
+  if [[ -z "$CELESTIA_TRUSTED_HASH" ]] || [[ -z "$CELESTIA_TRUSTED_HEIGHT" ]]; then
+    local header_json
+    header_json=$(curl -s "https://rpc-mocha.pops.one/header")
+    export CELESTIA_TRUSTED_HEIGHT=$(echo "$header_json" | jq -r '.result.header.height')
+    export CELESTIA_TRUSTED_HASH=$(echo "$header_json" | jq -r '.result.header.last_block_id.hash')
   else
-    echo "✅ Node already initialized at $DATA_DIR/$CHAIN_ID"
+    echo "CELESTIA_TRUSTED_HEIGHT=$CELESTIA_TRUSTED_HEIGHT"
+    echo "CELESTIA_TRUSTED_HASH=$CELESTIA_TRUSTED_HASH"
   fi
 }
 
-# Unsued, in MAIN but for reference:
+# Unused here, but for reference:
 run_node() {
-  echo "🏃‍♂️ Starting $NODE_TYPE node for $CHAIN_ID..."
+  echo "🏃‍♂️ Starting $CELESTIA_NODE_TYPE node on $CELESTIA_NETWORK network..."
   docker run -d \
-    --name "$NODE_NAME" \
-    -v "$DATA_DIR:/home/celestia" \
-    -p "$P2P_PORT:$P2P_PORT" \
-    -p "$RPC_PORT:$RPC_PORT" \
-    "$DOCKER_IMAGE" \
-    celestia "$NODE_TYPE" start --core.ip ""
+    --name "$CELESTIA_NODE_NAME" \
+    -v "$CELESTIA_DATA_DIR:/home/celestia" \
+    -p "$CELESTIA_P2P_PORT:$CELESTIA_P2P_PORT" \
+    -p "$CELESTIA_RPC_PORT:$CELESTIA_RPC_PORT" \
+    "$CELESTIA_DOCKER_IMAGE" \
+    /bin/celestia "$CELESTIA_NODE_TYPE" start --core.ip "$CELESTIA_NODE_CORE_IP" --p2p.network "$CELESTIA_NETWORK"
 }
 
 # === MAIN EXECUTION ===
 
 pull_image
-create_data_dir
 initialize_node
 set_write_jwt
 
-echo "🎉 $NODE_TYPE node for $CHAIN_ID is ready with persistent storage at $DATA_DIR"
-echo "Remember to save CELESTIA_NODE_WRITE_TOKEN in '.env' to persist it!"
+echo -e "🎉 $CELESTIA_NODE_TYPE node for $CELESTIA_NETWORK network is ready with persistent storage at $CELESTIA_DATA_DIR\n\n"
+echo    "CELESTIA_NODE_WRITE_TOKEN=$CELESTIA_NODE_WRITE_TOKEN"  
+echo    "CELESTIA_TRUSTED_HEIGHT=$CELESTIA_TRUSTED_HEIGHT"
+echo -e "CELESTIA_TRUSTED_HASH=$CELESTIA_TRUSTED_HASH\n"
+echo    "^^^^ Remember to save these in '.env' to persist them!"
 
