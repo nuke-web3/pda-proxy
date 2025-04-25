@@ -94,7 +94,7 @@ The PDA proxy depends on a connection to:
 1. Celestia Data Availability (DA) Node to:
    - Submit and retrieve (verifiable encrypted) blob data.
 1. (Optional) [Succinct prover network](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network) as a provider to generate Zero-Knowledge Proofs (ZKPs) of data existing on Celestia.
-   _See the [ZKP program](TODO) for details on what is proven._
+   _See the [ZKP program](./zkVM/sp1/program-chacha) for details on what is proven._
 
 ## Interact
 
@@ -156,7 +156,7 @@ TODO
 1. A Celestia Light Node [installed](https://docs.celestia.org/how-to-guides/celestia-node) & [running](https://docs.celestia.org/tutorials/node-tutorial#auth-token) accessible on `localhost`, or elsewhere.
    Alternatively, use [an RPC provider](https://github.com/celestiaorg/awesome-celestia/?tab=readme-ov-file#node-operator-contributions) you trust.
    - [Configure and fund a Celestia Wallet](https://docs.celestia.org/tutorials/celestia-node-key#create-a-wallet-with-celestia-node) for the node to sign and send transactions with.
-   - [Generate and set a node JWT with `write` permssions](https://docs.celestia.org/how-to-guides/quick-start#get-your-auth-token) and set in `.env` for the proxy to use. 
+   - [Generate and set a node JWT with `write` permissions](https://docs.celestia.org/how-to-guides/quick-start#get-your-auth-token) and set in `.env` for the proxy to use.
 
 ### Configure
 
@@ -188,24 +188,32 @@ _Don't forget you need to [configure your environment](#configure)_.
 
 As we don't want to embed huge files, secrets, and dev only example static files, you will need to place them on the host machine in the following paths:
 
-1. Create or use `scp` to copy a good `.env` to `/app/.env` on the host machine (see [config](#configure).
-1. **ONLY for testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
-   - You should use:
-    ```sh
-    TLS_CERTS_PATH=/app/static/sample.pem
-    TLS_KEY_PATH=/app/static/sample.rsa
-    ```
-1. (Optional, highly suggested) Locally download the `groth16` circuits required (~4GB worth of uncompressed data) 
-   1. `just download-groth16-circuit` to download to `artifacts-tar-gz-file := "/tmp/groth-circuits.tar.gz"` and extract it locally.
-   1. Use `scp` or similar to copy the tar file to host machine
-   1. Extract with a similar script to that in the [justfile](./justfile) `extract-groth16-circuit` recipe to `~/.sp1` directory on the host (likely `/root/.sp1`)
+1. Create or use `scp` to copy a known good `.env` to `/app/.env` on the host machine (see [config](#configure).
+1. Setup a DNS to point to your instance, update `.env` with email and domain
+1. Run [./scripts/setup_lets_encrypt.sh](./scripts/setup_lets_encrypt.sh) or otherwise configure TLS certs & keys.
+   1. **ONLY for testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
+      - You should use:
+      ```sh
+      TLS_CERTS_PATH=/app/static/sample.pem
+      TLS_KEY_PATH=/app/static/sample.rsa
+      ```
+1. Run [./scripts/init_celestia_docker.sh](./scripts/init_celestia_docker.sh) to initialize a local Celestia Node with persistent storage.
+   - Update `.env` to use the correct `CELESTIA_NODE_WRITE_TOKEN`
+1. Startup both the proxy and the celestia node with:
+   ```sh
+   docker compose --env-file /app/.env up -d
+   ```
 
 #### Running containers
 
-With the correct setup of the host:
+With the correct setup of the host, you can :
+
+
+Or manually just the proxy itself:
 
 ```sh
 # RUST_LOG is optional
+# Remove /app/static if using real TLS certs!
 docker run -it\
  -v /var/run/docker.sock:/var/run/docker.sock\
  -v /root/.sp1:/root/.sp1\
@@ -225,7 +233,7 @@ First, some tooling is required:
 1. SP1 zkVM Toolchain - [install instructions](https://docs.succinct.xyz/docs/sp1/getting-started/install)
 1. Protocol Buffers (Protobuf) compiler - [official examples](https://github.com/hyperium/tonic/tree/master/examples#examples) contain install instructions
 1. (Optional) Just - a modern alternative to `make` [installed](https://just.systems/man/en/packages.html)
-1. TODO NVIDIA compiler & containers <https://docs.succinct.xyz/docs/sp1/generating-proofs/hardware-acceleration#software-requirements>
+1. NVIDIA compiler & container toolkit <https://docs.succinct.xyz/docs/sp1/generating-proofs/hardware-acceleration#software-requirements>
 
 Then:
 
