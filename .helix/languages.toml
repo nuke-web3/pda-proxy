@@ -10,13 +10,15 @@ linkedProjects = ["program-chacha/Cargo.toml", "service/Cargo.toml"]
 [language-server.rust-analyzer.config]
 checkOnSave = "false"
 check.overrideCommand = [
-  "cargo", "clippy",
+  "cargo",
+  "clippy",
   "--workspace",
   "--message-format=json",
   "--all-features",
   "--all-targets",
   "--",
-  "-A", "incomplete-features"
+  "-A",
+  "incomplete-features",
 ]
 # Disable the unresolved proc macro diagnostic.
 # diagnostics.disabled = ["unresolved-proc-macro"]

@@ -1,4 +1,4 @@
-use sp1_build::{build_program_with_args, BuildArgs};
+use sp1_build::{BuildArgs, build_program_with_args};
 
 fn main() {
     // Greatly reduces cycle count when executing the zkVM program

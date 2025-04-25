@@ -13,3 +13,18 @@ tokio.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio"] }
 http-body-util.workspace = true
+bincode.workspace = true
+celestia-rpc.workspace = true
+sled.workspace = true
+sp1-sdk = { workspace = true, features = ["native-gnark"] }
+base64.workspace = true
+log.workspace = true
+hex.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+env_logger.workspace = true
+rand.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+rustls-pemfile.workspace = true
+hyper-rustls = "0.27.5"
