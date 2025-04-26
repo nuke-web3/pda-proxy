@@ -16,6 +16,7 @@ alias c := clean
 
 set shell := ["bash", "-cu"]
 set quiet := true
+set dotenv-path := ".env"
 
 env-settings := ".env"
 
@@ -27,19 +28,8 @@ sp1 *args:
 initial-config-installs:
     @just sp1 initial-config-installs
 
-_load-env:
-    if ! {{ path_exists(env-settings) }}; then \
-      echo -e "⛔ Missing required \`{{ env-settings }}\` file.\nCreate one with:\n\n\tcp example.env .env\n\nAnd then edit to adjust settings"; \
-      exit 1; \
-    fi; \
-    set -a; \
-    source {{ env-settings }};
-
-_pre-build: _load-env
-    if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then \
-      echo -e "⛔ Missing required \`$ZK_PROGRAM_ELF_PATH\` file.\nAttempting to build it..."; \
-      just sp1 build-elf; \
-    fi
+_pre-build:
+    @just sp1 build-elf
 
 _pre-run:
     echo "just pre-run TODO"
@@ -66,7 +56,7 @@ docker-load:
     gunzip -c /tmp/pda-proxy-docker.tar.gz | docker load
 
 # Run a pre-built docker image
-docker-run: _load-env
+docker-run:
     mkdir -p $PDA_DB_PATH
     # Note socket assumes running "normally" with docker managed by root
     # TODO: support docker rootless!
@@ -117,11 +107,11 @@ mocha-local-auth:
     celestia light auth admin --p2p.network mocha
 
 # Test blob.Get
-curl-blob-get: _load-env
+curl-blob-get:
     curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001
 
 # Test blob.Submit
-curl-blob-submit: _load-env
+curl-blob-submit:
     curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
          --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
          https://127.0.0.1:26657 \
