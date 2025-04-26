@@ -37,9 +37,6 @@ echo "✅ Certbot installed."
 # # Stop service temporarily to free port 80
 # echo "⛔ Stopping Docker container: $DOCKER_CONTAINER_NAME (if running)"
 # docker stop "$DOCKER_CONTAINER_NAME" || true
-TLS_EMAIL=you@example.com
-TLS_DOMAIN=your.domain.com
-# NOTE: you must update "your.domain.com" for PATHs below
 
 echo "📡 Requesting certificate for $TLS_DOMAIN"
 sudo certbot certonly --standalone -d "$TLS_DOMAIN" --agree-tos --non-interactive --email "$TLS_EMAIL"
