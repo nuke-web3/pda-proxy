@@ -10,83 +10,74 @@ alias be := build-elf
 alias f := fmt
 alias c := clean
 
+# Bash: fail if using undefined vars
+
+set shell := ["bash", "-c"]
+set quiet := true
+
 env-settings := "../../.env"
 sp1up-path := shell("which sp1up")
 cargo-prove-path := shell("which cargo-prove")
 
-# Install SP1 tooling & more
+# Install SP1 tooling & other initial setup
 initial-config-installs:
-    #!/usr/bin/env bash
-    if ! {{ path_exists(sp1up-path) }}; then
-        curl -L https://sp1.succinct.xyz | bash
-    fi
-    echo "✅ sp1up installed"
-
-    if ! {{ path_exists(cargo-prove-path) }}; then
-        {{ sp1up-path }}
-    else
-        echo -e "✅ cargo-prove installed\n     ⚠️👀NOTE: Check you have the correct version needed for this project!"
+    if ! {{ path_exists(sp1up-path) }}; then \
+        curl -L https://sp1.succinct.xyz | bash; \
+    fi; \
+    echo "✅ sp1up installed"; \
+    if ! {{ path_exists(cargo-prove-path) }}; then \
+        {{ sp1up-path }}; \
+    else \
+        echo -e "✅ cargo-prove installed\n     ⚠️👀NOTE: Check you have the correct version needed for this project!"; \
     fi
 
-# Build only the ELF for the zkVM program in release mode, includes optimizations
+_load-env:
+    if ! {{ path_exists(env-settings) }}; then \
+      echo -e "⛔ Missing required \`{{ env-settings }}\` file.\nCreate one with:\n\n\tcp example.env .env\n\nAnd then edit to adjust settings"; \
+      exit 1; \
+    fi; \
+    set -a; \
+    source {{ env-settings }};
+
+# Build only the zkVM ELF program in release mode (optimized)
 build-elf:
-    #!/usr/bin/env bash
-    if ! {{ path_exists(cargo-prove-path) }}; then
-        echo -e "⛔ Missing zkVM Compiler.\nRun `just initial-config-installs` to prepare your environment"
-        exit 1
-    fi
-    source {{ env-settings }}
-    if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then
-      echo -e "Can't find ELF at \`$ZK_PROGRAM_ELF_PATH\` .\nAttempting to build it..."
-      # Ensure further that we always build most optimized ELF
-      RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" \
-      cargo prove build -p chacha-program
+    if ! {{ path_exists(cargo-prove-path) }}; then \
+        echo -e "⛔ Missing zkVM Compiler.\nRun \`just initial-config-installs\` to prepare your environment"; \
+        exit 1; \
+    fi; \
+    source {{ env-settings }}; \
+    if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then \
+        echo -e "Can't find ELF at \`$ZK_PROGRAM_ELF_PATH\`.\nAttempting to build it..."; \
+        RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" cargo prove build -p chacha-program; \
     fi
 
-_pre-run:
-    #!/usr/bin/env bash
-    if ! {{ path_exists(env-settings) }}; then
-        echo -e "⛔ Missing required \`{{ env-settings }}\` file.\nCreate one with:\n\n\tcp example.env .env\n\nAnd then edit to adjust settings"
-        exit 1
-    fi
-
-# Run in release mode, with optimizations AND debug logs
-run-release *FLAGS: build-elf  _pre-run
-    #!/usr/bin/env bash
-    set -a  # Auto export vars
-    source {{ env-settings }}
+# Run the proxy in release mode with debug logs
+run-release *FLAGS: build-elf _load-env
     RUST_LOG=pda_proxy=debug cargo r -r -- {{ FLAGS }}
 
-# Run in debug mode, with extra pre-checks, no optimizations
-run-debug *FLAGS: build-elf  _pre-run
-    #!/usr/bin/env bash
-    set -a  # Auto export vars
-    source {{ env-settings }}
-    # TODO :Check node up with some healthcheck endpoint
-
-    # export CELESTIA_NODE_WRITE_TOKEN=$(celestia light auth admin --p2p.network mocha)
+# Run the proxy in debug mode
+run-debug *FLAGS: build-elf _load-env
+    # TODO: Add node healthcheck (e.g., curl local /health endpoint)
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
-# Print the zkVM program viewkey (`vkey`)
-print-viewkey *FLAGS: build-elf  _pre-run
-    #!/usr/bin/env bash
+# Print the zkVM program viewkey (vkey)
+print-viewkey *FLAGS: build-elf _load-env
     cargo r -r --bin vkey -- {{ FLAGS }}
 
-# Build in debug mode, no optimizations
-build-debug: build-elf 
+# Build in debug mode
+build-debug: build-elf
     cargo b
 
-# Build in release mode, includes optimizations
-build-release: build-elf 
+# Build in release mode
+build-release: build-elf
     cargo b -r
 
-# Scrub build artifacts
+# Clean build artifacts
 clean:
-    #!/usr/bin/env bash
     cargo clean
 
-# Format source code
+# Format source code (Rust, Justfile, and TOMLs)
 fmt:
     cargo fmt # *.rs
     just --quiet --unstable --fmt > /dev/null # justfile
-    taplo format # *.toml
+    taplo format > /dev/null 2>&1 # *.toml
