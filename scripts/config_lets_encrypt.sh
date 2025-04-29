@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
+
+# Install certbot, get first cert for set domain & email
+# configure systemd to renew ~12 hour intervals (cron fallback)
+
 set -euo pipefail
 
-# Config Variables
+source ./common.sh
 source ../.env
-DOCKER_CONTAINER_NAME="pda-proxy"
+
+require_dot_env_vars TLS_DOMAIN TLS_EMAIL
+
+TLS_CERTS_PATH="/etc/letsencrypt/live/$TLS_DOMAIN/fullchain.pem"
+TLS_KEY_PATH="/etc/letsencrypt/live/$TLS_DOMAIN/privkey.pem"
+
+export TLS_CERTS_PATH
+export TLS_KEY_PATH
+update_env_var "TLS_CERTS_PATH" "$TLS_CERTS_PATH"
+update_env_var "TLS_KEY_PATH" "$TLS_KEY_PATH"
+echo "✅ Updated .env with TLS_KEY_PATH, TLS_CERTS_PATH"
 
 echo "👉 Detecting OS and installing Certbot..."
 

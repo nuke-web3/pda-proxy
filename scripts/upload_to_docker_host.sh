@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Config
+source ./common.sh
 source ../.env
+
+require_dot_env_vars REMOTE_HOST REMOTE_IDENTITY
 
 set -x  # start verbose output
 
 # Batch upload to /app
-# Don't archive, we wan't to use new HOST's user
+# Don't archive, we want HOST user as owner (likely root)
 rsync --recursive --links --perms --verbose --compress --progress \
   -e "ssh -i $REMOTE_IDENTITY" \
   ./service/static/ \
   ./scripts/ \
-  .env \
+  ../.env \
   /tmp/pda-proxy-docker.tar.gz \
+  ../compose.yml \
   "$REMOTE_HOST:/app/"

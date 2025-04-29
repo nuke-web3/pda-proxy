@@ -43,17 +43,17 @@ run-debug *FLAGS: _pre-build _pre-run
     # TODO :Check DA node up with some healthcheck endpoint
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
-# Build docker image & tag `pda-proxy`
+# Build docker image & tag
 docker-build:
-    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag pda-proxy --progress=plain .
+    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
 
 # Save docker image to a tar.gz
 docker-save:
-    docker save pda-proxy | gzip > /tmp/pda-proxy-docker.tar.gz
+    docker save "$DOCKER_CONTAINER_NAME" | gzip > "/tmp/$DOCKER_CONTAINER_NAME-docker.tar.gz"
 
 # Load docker image from tar.gz
 docker-load:
-    gunzip -c /tmp/pda-proxy-docker.tar.gz | docker load
+    gunzip -c "/tmp/$DOCKER_CONTAINER_NAME-docker.tar.gz" | docker load
 
 # Run a pre-built docker image
 docker-run:
@@ -69,7 +69,7 @@ docker-run:
       --env TLS_CERTS_PATH=/app/static/sample.pem --env TLS_KEY_PATH=/app/static/sample.rsa \
       --env RUST_LOG=pda_proxy=debug \
       --network=host -p $PDA_PORT:$PDA_PORT \
-      pda-proxy
+      "$DOCKER_CONTAINER_NAME"
 
 # Build in debug mode, no optimizations
 build-debug: _pre-build
@@ -102,7 +102,9 @@ mocha:
     # If not, see https://docs.celestia.org/tutorials/node-tutorial#setting-up-dependencies
     celestia light start --core.ip rpc-mocha.pops.one --p2p.network mocha
 
-# Setup and print to stdout, needs to be set in env to be picked up by pda-proxy
+# Setup and print to stdout, needs to be set in env to be picked up
+
+# See also ./scripts/init_celestia_docker.sh
 mocha-local-auth:
     celestia light auth admin --p2p.network mocha
 
