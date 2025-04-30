@@ -10,13 +10,13 @@ source ../.env
 
 require_dot_env_vars TLS_DOMAIN TLS_EMAIL
 
-TLS_CERTS_PATH="/etc/letsencrypt/live/$TLS_DOMAIN/fullchain.pem"
-TLS_KEY_PATH="/etc/letsencrypt/live/$TLS_DOMAIN/privkey.pem"
+TLS_CERTS_PATH="/etc/letsencrypt/live/$PTLS_DOMAINP/fullchain.pem"
+TLS_KEY_PATH="/etc/letsencrypt/live/${TLS_DOMAIN}/privkey.pem"
 
 export TLS_CERTS_PATH
 export TLS_KEY_PATH
-update_env_var "TLS_CERTS_PATH" "$TLS_CERTS_PATH"
-update_env_var "TLS_KEY_PATH" "$TLS_KEY_PATH"
+update_env_var "TLS_CERTS_PATH" "${TLS_CERTS_PATH}"
+update_env_var "TLS_KEY_PATH" "${TLS_KEY_PATH}"
 echo "✅ Updated .env with TLS_KEY_PATH, TLS_CERTS_PATH"
 
 echo "👉 Detecting OS and installing Certbot..."
@@ -50,20 +50,20 @@ echo "✅ Certbot installed."
 
 # # Stop service temporarily to free port 80
 # echo "⛔ Stopping Docker container: $DOCKER_CONTAINER_NAME (if running)"
-# docker stop "$DOCKER_CONTAINER_NAME" || true
+# docker stop "${DOCKER_CONTAINER_NAME}" || true
 
-echo "📡 Requesting certificate for $TLS_DOMAIN"
-sudo certbot certonly --standalone -d "$TLS_DOMAIN" --agree-tos --non-interactive --email "$TLS_EMAIL"
+echo "📡 Requesting certificate for ${TLS_DOMAIN}"
+sudo certbot certonly --standalone -d "${TLS_DOMAIN}" --agree-tos --non-interactive --email "${TLS_EMAIL}"
 
-CERTS_PATH="/etc/letsencrypt/live/$TLS_DOMAIN"
-echo "🔐 Certs stored at $CERTS_PATH"
+CERTS_PATH="/etc/letsencrypt/live/${TLS_DOMAIN}"
+echo "🔐 Certs stored at ${CERTS_PATH}"
 
 # echo "🚀 Starting Docker container again..."
-# docker start "$DOCKER_CONTAINER_NAME"
+# docker start "${DOCKER_CONTAINER_NAME}"
 
 # Set up automatic renewal with a post-hook
 # TODO: are we required to restart with new cert?
-# RENEW_CMD="certbot renew --quiet --deploy-hook 'docker restart $DOCKER_CONTAINER_NAME'"
+# RENEW_CMD="certbot renew --quiet --deploy-hook 'docker restart ${DOCKER_CONTAINER_NAME}'"
 RENEW_CMD="certbot renew --quiet"
 
 # NOTE: Assumes systemd
@@ -75,7 +75,7 @@ Description=Certbot Renew
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env bash -c '$RENEW_CMD'
+ExecStart=/usr/bin/env bash -c '${RENEW_CMD}'
 EOF
 
   sudo bash -c "cat > /etc/systemd/system/certbot-renew.timer" <<EOF
@@ -99,7 +99,7 @@ EOF
 
 else
   echo "🕒 Falling back to cron job for auto-renew..."
-  (sudo crontab -l 2>/dev/null; echo "0 */12 * * * $RENEW_CMD") | sudo crontab -
+  (sudo crontab -l 2>/dev/null; echo "0 */12 * * * $PRENEW_CMDP") | sudo crontab -
   echo "✅ Cron job added to renew certificates every 12h."
 fi
 
