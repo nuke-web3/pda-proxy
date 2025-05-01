@@ -19,7 +19,7 @@ initialize_node() {
   if [ ! -f "$CELESTIA_DATA_DIR/config.toml" ]; then
     echo "🔧 Initializing $CELESTIA_NODE_TYPE node for $CELESTIA_NETWORK network..."
     docker run --rm \
-      --user root \
+      --user $(id -u):$(id -g) \
       -v "$CELESTIA_DATA_DIR:/home/celestia" \
       "$CELESTIA_DOCKER_IMAGE" \
       /bin/celestia "$CELESTIA_NODE_TYPE" init --core.ip "$CELESTIA_NODE_CORE_IP" --p2p.network "$CELESTIA_NETWORK"
@@ -34,7 +34,7 @@ initialize_node() {
 set_write_jwt_with_docker() {
   local token_output
   token_output=$(docker run --rm \
-    --user root \
+    --user $(id -u):$(id -g) \
     -v "$CELESTIA_DATA_DIR:/home/celestia" \
     "$CELESTIA_DOCKER_IMAGE" \
     /bin/celestia "$CELESTIA_NODE_TYPE" auth write 2>&1)

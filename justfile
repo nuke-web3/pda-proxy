@@ -60,8 +60,9 @@ docker-run:
     mkdir -p $PDA_DB_PATH
     # Note socket assumes running "normally" with docker managed by root
     # TODO: support docker rootless!
-    # FIXME: better way to share files accross .env file!
+    # FIXME: files with relative paths accross .env file!
     docker run --rm -it \
+      --user $(id -u):$(id -g) \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v ./service/static:/app/static \
       -v $PDA_DB_PATH:$PDA_DB_PATH \
