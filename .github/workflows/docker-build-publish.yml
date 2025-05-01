@@ -1,0 +1,24 @@
+name: Docker Build & Publish
+
+# Trigger on new semantic version tags
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The checkout reference (ie tag, branch, sha)"
+        required: true
+        type: string
+
+jobs:
+  docker-security-build:
+    permissions:
+      contents: write
+      packages: write
+    uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.5.0 # yamllint disable-line rule:line-length
+    with:
+      dockerfile: Dockerfile
+      checkout_ref: ${{ github.event.inputs.ref }}
+    secrets: inherit
