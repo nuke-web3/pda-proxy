@@ -3,6 +3,7 @@ default:
 
 alias r := run-debug
 alias rr := run-release
+alias bc := bench-cycles
 alias db := docker-build
 alias ds := docker-save
 alias dl := docker-load
@@ -33,6 +34,10 @@ _pre-build:
 
 _pre-run:
     echo "just pre-run TODO"
+
+# Check cycle counts for zkVM on ./zkVM/static example inputs
+bench-cycles *FLAGS: _pre-build _pre-run
+    cargo r -r -p sp1-util --bin cli -- --execute
 
 # Run in release mode, with optimizations AND debug logs
 run-release *FLAGS: _pre-build _pre-run

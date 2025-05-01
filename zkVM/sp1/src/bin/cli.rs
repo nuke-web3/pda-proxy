@@ -3,7 +3,7 @@ use hex::FromHex;
 use sha2::{Digest, Sha256};
 use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
 
-use zkvm_common::chacha;
+use zkvm_common::{KEY_LEN, NONCE_LEN, chacha, std_only::ZkvmOutput};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const CHACHA_ELF: &[u8] = include_elf!("chacha-program");
@@ -41,14 +41,19 @@ fn main() {
     // - nonce = 12 bytes (MUST BE UNIQUE - NO REUSE!)
     // - input_plaintext = bytes to encrypt
 
-    let key = <[u8; 32]>::from_hex(
+    let input_key = <[u8; KEY_LEN]>::from_hex(
         std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
     )
-    .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
-    stdin.write_slice(&key);
+    .unwrap_or_else(|_| {
+        panic!(
+            "ENCRYPTION_KEY must be {} bytes, hex encoded (ex: `1234...abcd`)",
+            KEY_LEN
+        )
+    });
+    stdin.write_slice(&input_key);
 
-    let nonce: [u8; 12] = zkvm_common::random_nonce();
-    stdin.write_slice(&nonce);
+    let input_nonce: [u8; NONCE_LEN] = zkvm_common::random_nonce();
+    stdin.write_slice(&input_nonce);
 
     // TODO: replace example bytes with service interface
     let input_plaintext: &[u8] = zkvm_common::INPUT_BYTES;
@@ -57,39 +62,35 @@ fn main() {
     let client = ProverClient::from_env();
     if args.execute {
         // Execute the program
-        let (output, report) = client.execute(CHACHA_ELF, &stdin).run().unwrap();
-        println!("Program executed successfully.");
+        let (output_buffer, report) = client.execute(CHACHA_ELF, &stdin).run().unwrap();
 
         // Read the output.
-        // - sha2 hash = 32 bytes
-        // - ciphertext = encrypted bytes
-        let output = output.to_vec();
-        let (output_hash_plaintext, output_ciphertext) = output.split_at(32);
+        // - privkey sha2 hash = 32 bytes
+        // - nonce = 12 bytes
+        // - plaintext sha2 hash = 32 bytes
+        // - ciphertext = encrypted bytes, ~1M bytes
+        let output =
+            ZkvmOutput::from_bytes(output_buffer.as_slice()).expect("Failed to parse header");
 
         // Check against the input
         let input_plaintext_digest = Sha256::digest(input_plaintext);
         println!(
             "Input -> plaintext hash: 0x{}",
-            zkvm_common::bytes_to_hex(&input_plaintext_digest)
+            zkvm_common::std_only::bytes_to_hex(&input_plaintext_digest)
         );
-        println!(
-            "zkVM -> plaintext hash: 0x{}",
-            zkvm_common::bytes_to_hex(output_hash_plaintext)
-        );
+        dbg!(&output);
 
-        let ciphertext_digest = Sha256::digest(output_ciphertext);
-        println!(
-            "zkVM -> ciphertext hash: 0x{}",
-            zkvm_common::bytes_to_hex(&ciphertext_digest)
-        );
-
+        assert_eq!(input_nonce, output.nonce);
         // NOTE: stream cipher is decrypted by running the chacha encryption again.
         // (plaintext XOR keystream XOR keystream = plaintext; QED)
-        let mut output_plaintext = output_ciphertext.to_owned();
-        chacha(&key, &nonce, &mut output_plaintext);
+        let mut output_plaintext = output.ciphertext.to_owned();
+        chacha(&input_key, &output.nonce, &mut output_plaintext);
 
         assert_eq!(output_plaintext, input_plaintext);
         println!("Decryption of zkVM ciphertext matches input!");
+        let input_key_hash = Sha256::digest(input_key);
+        assert_eq!(input_key_hash.as_slice(), output.privkey_hash);
+        println!("Key used matched!");
 
         // Record the number of cycles executed.
         println!("Number of cycles: {}", report.total_instruction_count());
