@@ -3,7 +3,7 @@ use hex::FromHex;
 use sha2::{Digest, Sha256};
 use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
 
-use zkvm_common::{chacha, std_only::ZkvmOutput, KEY_LEN, NONCE_LEN};
+use zkvm_common::{KEY_LEN, NONCE_LEN, chacha, std_only::ZkvmOutput};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const CHACHA_ELF: &[u8] = include_elf!("chacha-program");

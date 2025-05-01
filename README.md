@@ -8,10 +8,11 @@
 
 ### TODO
 
-- [ ] `blob.Submit` encrypts before proxy submission
+- [x] `blob.Submit` encrypts before proxy submission
 - [ ] `blob.Get` proxy result is decrypted before responding
 - [ ] `state.Balance` & `state.AccountAddress` & `state.Transfer` passthrough proxy
-- [ ] Fully compliant passthrough proxy for all non-encrypted data API calls (more than `Blob` and `State`?)
+- [x] Fully compliant passthrough proxy for all non-encrypted data API calls (more than `Blob` and `State`?)
+  - Need to pass valid responses if internal errors happen in all cases (don't drop the connection)
 
 ---
 
@@ -115,15 +116,17 @@ curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NOD
 curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
      --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.GetAll", "params": [ 4499999, [ "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=" ] ] }' \
      $PDA_SOCKET
-# blob.Submit
+# blob.Submit (dummy data)
 # Note: send "{}" as empty `tx_config` object, so the node uses it's default key to sign & submit to Celestia
-# Also for testing we explicitly allow --insecure
 curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
      --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
      https://$PDA_SOCKET \
      --verbose \
      --insecure
     # ^^^^ DO NOT use insecure TLS in real scenarios!
+# blob.Submit (example input ~1.5MB)
+cd scripts
+./test_example_data_file_via_curl.sh
 ```
 
 Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides/submit-data#api) to build around a PDA proxy.
@@ -152,7 +155,7 @@ TODO
      - Light client (local or remote) over `26658`
      - (Optional) Succinct prover network over `443`
 
-1. A whitelisted key in your `env` for use with the Succinct prover network Key - [requested here](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network).
+   Example AWS instance: [g6.xlarge (single L4 GPU + 8 vCPU)](https://aws.amazon.com/ec2/instance-types/g6/)
 
 1. A Celestia Light Node [installed](https://docs.celestia.org/how-to-guides/celestia-node) & [running](https://docs.celestia.org/tutorials/node-tutorial#auth-token) accessible on `localhost`, or elsewhere.
    Alternatively, use [an RPC provider](https://github.com/celestiaorg/awesome-celestia/?tab=readme-ov-file#node-operator-contributions) you trust.
@@ -161,7 +164,7 @@ TODO
 
 ### Configure
 
-Required and optional settings are best configured via a `.env` file. See [`example.env`](./example.env) for configurable items.
+**_Required_** and optional settings are best configured via a `.env` file. See [`example.env`](./example.env) for configurable items.
 
 ```sh
 cp example.env .env
@@ -189,17 +192,18 @@ _Don't forget you need to [configure your environment](#configure)_.
 
 As we don't want to embed huge files, secrets, and dev only example static files, you will need to place them on the host machine in the following paths:
 
-1. Create or use `scp` to copy a known good `.env` to `/app/.env` on the host machine (see [config](#configure).
-1. Setup a DNS to point to your instance, update `.env` with email and domain
-1. Run [./scripts/setup_lets_encrypt.sh](./scripts/setup_lets_encrypt.sh) or otherwise configure TLS certs & keys.
-   1. **ONLY for testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
+1. Setup a DNS to point to your instance with email and domain.
+1. Create and update an `.env` (see [config](#configure).
+1. Run [./scripts/setup_remote_host.sh](./scripts/setup_remote_host.sh) or otherwise see the scripts to manually configure similarly.
+   1. **ONLY for development & testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
       - You should use:
       ```sh
       TLS_CERTS_PATH=/app/static/sample.pem
       TLS_KEY_PATH=/app/static/sample.rsa
       ```
-1. Run [./scripts/init_celestia_docker.sh](./scripts/init_celestia_docker.sh) to initialize a local Celestia Node with persistent storage.
-   - Update `.env` to use the correct `CELESTIA_NODE_WRITE_TOKEN`
+
+Note that scripts run on the host update the `/app/.env` file with specific settings for the Celestia node.
+Logs will print **very important information** please read those carefully.
 
 #### Running containers
 
@@ -265,7 +269,6 @@ Docker and [Podman](https://podman.io/) are configured in [Dockerfile](./Dockerf
 just docker-build
 just docker-run
 
-
 # Manually
 
 ## Build
@@ -291,5 +294,5 @@ The images are built and published for [releases](https://github.com/celestiaorg
 
 Based heavily on:
 
-- <https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/proc_macro.rs>
 - <https://github.com/eigerco/lumina/tree/main/rpc>
+- <https://github.com/celestiaorg/eq-service>

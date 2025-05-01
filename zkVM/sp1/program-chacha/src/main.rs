@@ -3,7 +3,7 @@ sp1_zkvm::entrypoint!(main);
 
 use sha2::{Digest, Sha256};
 
-use zkvm_common::{chacha, NONCE_LEN};
+use zkvm_common::{NONCE_LEN, chacha};
 
 pub fn main() {
     let key = sp1_zkvm::io::read_vec(); // 32 bytes
@@ -37,11 +37,7 @@ pub fn main() {
 
     // Encrypt and commit
     // Incorrect sized buffers passed in are unacceptable, and thus panic.
-    chacha(
-        &key.try_into().expect("key=32B"),
-        &nonce,
-        &mut buffer,
-    );
+    chacha(&key.try_into().expect("key=32B"), &nonce, &mut buffer);
 
     sp1_zkvm::io::commit_slice(&buffer); // ~1M bytes
 }

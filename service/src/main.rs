@@ -289,7 +289,10 @@ pub async fn inbound_handler(
                             if let Some(proof_with_values) =
                                 pda_runner.get_verifiable_encryption(job).await?
                             {
-                                debug!("Replacing blob.data with: {proof_with_values:?}");
+                                debug!(
+                                    "Replacing blob.data with <Sp1ProofWithPublicValues>.proof = {:?}",
+                                    proof_with_values.proof
+                                );
 
                                 let encrypted_data = bincode::serialize(&proof_with_values)?;
                                 let encrypted_blob = Blob::new(

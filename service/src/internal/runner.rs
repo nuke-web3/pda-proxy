@@ -73,10 +73,9 @@ impl PdaRunner {
         &self,
         job: Job,
     ) -> Result<Option<SP1ProofWithPublicValues>, PdaRunnerError> {
-        info!("Received request for: {job:?}");
-
         let job_key = bincode::serialize(&job.anchor)
             .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
+        info!("0x{} - Received request", hex::encode(&job_key));
 
         // Check DB for finished jobs
         if let Some(proof_data) = self
@@ -137,14 +136,20 @@ impl PdaRunner {
             match job_status {
                 JobStatus::LocalZkProofPending => return Ok(None),
                 _ => {
-                    let e = "Job queue is in invalid state for {job:?}";
+                    let e = format!(
+                        "0x{} - Job queue is in invalid state",
+                        hex::encode(&job_key)
+                    );
                     error!("{e}");
-                    return Err(PdaRunnerError::InternalError(e.to_string()));
+                    return Err(PdaRunnerError::InternalError(e));
                 }
             }
         }
 
-        info!("New {job:?} sending to worker and adding to queue");
+        info!(
+            "0x{} - New job sending to worker and adding to queue",
+            hex::encode(&job_key)
+        );
         self.queue_db
             .insert(
                 &job_key,
@@ -177,7 +182,7 @@ impl PdaRunner {
         while let Some(Some(job)) = job_receiver.recv().await {
             let service = self.clone();
             tokio::spawn(async move {
-                debug!("Job worker received {job:?}",);
+                debug!("Worker received job");
                 let _ = service.prove(job).await; //Don't return with "?", we run keep looping
             });
         }
@@ -210,19 +215,19 @@ impl PdaRunner {
                         .await
                     {
                         Ok(zk_proof) => {
-                            info!("🎉 {job:?} Finished!");
+                            info!("0x{} - 🎉 Finished!", hex::encode(&job_key));
                             job_status = JobStatus::ZkProofFinished(zk_proof);
                             self.finalize_job(&job_key, job_status)?;
                         }
                         Err(e) => {
-                            error!("{job:?} failed progressing DataAvailable: {e}");
+                            error!("0x{} - Failed progressing job: {e}", hex::encode(&job_key));
                             job_status = JobStatus::Failed(
                                 e, None, // TODO: should this be retryable?
                             );
                             self.finalize_job(&job_key, job_status)?;
                         }
                     };
-                    debug!("ZK request sent");
+                    debug!("0x{} - ZKP stored in finalized DB", hex::encode(job_key));
                 }
                 _ => error!("Queue has INVALID status! Finished jobs stuck in queue!"),
             }
@@ -288,7 +293,6 @@ impl PdaRunner {
     fn handle_zk_client_error(
         &self,
         zk_client_error: &SP1NetworkError,
-        job: &Job,
         job_key: &[u8],
     ) -> PdaRunnerError {
         error!("SP1 Client error: {zk_client_error}");
@@ -296,19 +300,22 @@ impl PdaRunner {
         match zk_client_error {
             SP1NetworkError::SimulationFailed | SP1NetworkError::RequestUnexecutable { .. } => {
                 e = PdaRunnerError::DaClientError(format!(
-                    "ZKP program critical failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
+                    "ZKP program critical failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
+                    hex::encode(job_key)
                 ));
                 job_status = JobStatus::Failed(e.clone(), None);
             }
             SP1NetworkError::RequestUnfulfillable { .. } => {
                 e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
+                    "ZKP network failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
+                    hex::encode(job_key)
                 ));
                 job_status = JobStatus::Failed(e.clone(), None);
             }
             SP1NetworkError::RequestTimedOut { request_id } => {
                 e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network: {zk_client_error} occurred for {job:?}"
+                    "ZKP network: {zk_client_error} occurred for job 0x{}",
+                    hex::encode(job_key)
                 ));
 
                 let id = request_id
@@ -320,7 +327,8 @@ impl PdaRunner {
             }
             SP1NetworkError::RpcError(_) | SP1NetworkError::Other(_) => {
                 e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
+                    "ZKP network failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
+                    hex::encode(job_key)
                 ));
                 // TODO: We cannot clone thus we cannot insert into a JobStatus::...(proof_input)
                 // So we just redo the work from scratch for the DA side as a stupid workaround
@@ -365,7 +373,7 @@ impl PdaRunner {
         let input_plaintext: &[u8] = job.input.data.as_slice();
         stdin.write_slice(input_plaintext);
 
-        debug!("Starting proof: {job:?}");
+        debug!("0x{} - Starting proof", hex::encode(job_key));
         let proof = zk_client_handle
             .prove(&proof_setup.pk, &stdin)
             .groth16()
@@ -373,11 +381,11 @@ impl PdaRunner {
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
             .map_err(|e| {
                 if let Some(down) = e.downcast_ref::<SP1NetworkError>() {
-                    return self.handle_zk_client_error(down, job, job_key);
+                    return self.handle_zk_client_error(down, job_key);
                 }
                 PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?;
-        debug!("COMPLETE proof: {job:?}");
+        debug!("0x{} - Proof complete", hex::encode(job_key));
         Ok(proof)
     }
 
@@ -409,7 +417,10 @@ impl PdaRunner {
         update_status: JobStatus,
         job: Job,
     ) -> Result<(), PdaRunnerError> {
-        debug!("Sending {job:?} back with updated status: {update_status:?}");
+        debug!(
+            "Sending job 0x{} back with updated status: {update_status:?}",
+            hex::encode(&job_key)
+        );
         (&self.queue_db, &self.finished_db)
             .transaction(|(queue_tx, finished_tx)| {
                 finished_tx.remove(job_key.clone())?;

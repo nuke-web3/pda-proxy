@@ -64,7 +64,7 @@ pub mod std_only {
         }
     }
 
-    impl fmt::Debug for ZkvmOutput<'_> {
+    impl core::fmt::Debug for ZkvmOutput<'_> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let privkey_hash_hex = bytes_to_hex(&self.privkey_hash);
             let nonce_hex = bytes_to_hex(&self.nonce);

@@ -1,3 +1,5 @@
+use core::fmt;
+
 use crate::PdaRunnerError;
 
 use serde::{Deserialize, Serialize};
@@ -20,9 +22,9 @@ pub struct Input {
     pub data: Vec<u8>,
 }
 
-/// A committment to the input, likley a hash or related fingerprint.
+/// A commitment to the input, likely a hash or related fingerprint.
 /// TODO: what should structure be?
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Anchor {
     pub data: Vec<u8>,
 }
@@ -30,6 +32,15 @@ pub struct Anchor {
 impl AsRef<[u8]> for Anchor {
     fn as_ref(&self) -> &[u8] {
         self.data.as_slice()
+    }
+}
+
+impl fmt::Debug for Anchor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let anchor_hex = bytes_to_hex(&self.data);
+        f.debug_struct("Anchor")
+            .field("data (hex)", &anchor_hex)
+            .finish()
     }
 }
 
@@ -60,4 +71,9 @@ impl std::fmt::Debug for JobStatus {
             JobStatus::Failed(_, _) => write!(f, "Failed"),
         }
     }
+}
+
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    let digest_hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    digest_hex
 }
