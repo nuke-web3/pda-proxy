@@ -7592,4 +7592,5 @@ version = "0.1.0"
 dependencies = [
  "chacha20",
  "rand 0.9.1",
+ "sha2 0.10.8",
 ]

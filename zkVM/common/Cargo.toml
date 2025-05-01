@@ -5,10 +5,11 @@ edition.workspace = true
 
 [dependencies]
 chacha20.workspace = true
-rand = { version = "0.9", default-features = false, optional = true, features = [
+rand = { workspace = true, default-features = false, optional = true, features = [
   "os_rng",
 ] }
+sha2 = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
-std = ["rand/os_rng"]
+std = ["rand/os_rng", "sha2"]
