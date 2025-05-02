@@ -1,22 +1,6 @@
-# Private DA Middleware Proxy
+# Private Data Availability Proxy
 
-> ⚠
-> **_NOTICE_**
-> Work in Progress!
-> NOT ready for use!/
-> ⚠
-
-### TODO
-
-- [x] `blob.Submit` encrypts before proxy submission
-- [ ] `blob.Get` proxy result is decrypted before responding
-- [ ] `state.Balance` & `state.AccountAddress` & `state.Transfer` passthrough proxy
-- [x] Fully compliant passthrough proxy for all non-encrypted data API calls (more than `Blob` and `State`?)
-  - Need to pass valid responses if internal errors happen in all cases (don't drop the connection)
-
----
-
-A [Celestia](https://celestia.org) client for the [`Blob` and `State` JSON RPC namespaces](https://node-rpc-docs.celestia.org/) enabling sensitive data to be **_verifiably encrypted_** before submission on the (public) network, and enable decryption on retrieval.
+A [Celestia Data Availability (DA)](https://celestia.org) proxy, enabling use of the [canonical JSON RPC](https://node-rpc-docs.celestia.org/) but intercepting and [verifiably encrypting](./doc/verifiable_encryption.md) sensitive data before submission on the public DA network, and enable decryption on retrieval.
 Non-sensitive calls are unmodified.
 
 Verifiable encryption is enabled via an [SP1 Zero Knowledge Proof (ZKP)](https://docs.succinct.xyz/docs/sp1/what-is-a-zkvm).
@@ -29,17 +13,22 @@ Verifiable encryption is enabled via an [SP1 Zero Knowledge Proof (ZKP)](https:/
 
 ## Known Limitations
 
-At time of writing, as it should be possible to change these limitations:
+Presently all HTTP requests to the proxy are transparently proxied to an upstream Celestia node, interception logic handles these JSON RPC methods:
 
-- Assumes that there is a single blob per transaction, no logic to handle multiple blobs.
-- Verifiable Encryption is **_one-at-a-time_**, and takes **_minutes to complete each request_**.
-  - If the service is processing a job, it will respond with `busy` and (may?) add that to a queue.
-  - {Other proxy calls should still be responsive}
+- (complete) `blob.Submit` encrypts before proxy submission
+- (not implemented)`blob.Get` proxy result is decrypted before responding
 
-Possible to change these, but requires upstream involvement:
+At time of writing, as it should be possible to change these limitations internally:
+
+- [ ] https://github.com/celestiaorg/pda-proxy/issues/11
+- [ ] https://github.com/celestiaorg/pda-proxy/issues/12
+
+It's possible to change these, but requires upstream involvement:
 
 - [Max blob size on Celestia](https://docs.celestia.org/how-to-guides/submit-data#maximum-blob-size) is presently ~2MB
-- Upstream jsonrpsee en/decryption middleware feature into lumina?
+- Upstream jsonrpsee en/decryption middleware feature into lumina Rust client?
+
+> Please [open an issue](https://github.com/celestiaorg/pda-proxy/issues) if you have any requests!
 
 ## Architecture
 
@@ -176,14 +165,12 @@ cp example.env .env
 
 The images are available:
 
-TODO
-
 ```sh
 # ghcr:
-docker pull ghcr.io/celestiaorg/pda-proxy:latest
+docker pull ghcr.io/celestiaorg/pda-proxy
 
 # Docker hub:
-docker pull celestiaorg/pda-proxy:latest
+docker pull celestiaorg/pda-proxy
 ```
 
 _Don't forget you need to [configure your environment](#configure)_.
@@ -207,7 +194,7 @@ Logs will print **very important information** please read those carefully.
 
 #### Running containers
 
-With the [correct setup of the host](#setup-host), you can startup both the proxy and local celestia node with:
+With a [correct setup of the host](#setup-host), you can startup both the proxy and local celestia node with:
 
 ```sh
 docker compose --env-file /app/.env up -d
@@ -216,7 +203,22 @@ docker compose --env-file /app/.env up -d
 Or manually just the proxy itself:
 
 ```sh
+# if you are developing from this repo:
 just docker-run
+
+# If you are only running:
+source .env
+mkdir -p $PDA_DB_PATH
+# Note socket assumes running "normally" with docker managed by root
+docker run --rm -it \
+  --user $(id -u):$(id -g) \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+ -v $PDA_DB_PATH:$PDA_DB_PATH \
+  --env-file {{ env-settings }} \
+  --env RUST_LOG=pda_proxy=debug \
+  --network=host \
+  -p $PDA_PORT:$PDA_PORT \
+  "$DOCKER_CONTAINER_NAME"
 ```
 
 ## Develop
