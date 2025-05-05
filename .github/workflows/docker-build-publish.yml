@@ -12,6 +12,7 @@ on:
 
 jobs:
   docker-security-build:
+    runs-on: self-hosted
     permissions:
       contents: write
       packages: write
