@@ -18,7 +18,7 @@ jobs:
       contents: write
       packages: write
     uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.6.3 # yamllint disable-line rule:line-length
-    runs-on: self-hosted
+    runs-on: sysrunner
     with:
       dockerfile: Dockerfile
       checkout_ref: ${{ github.event.inputs.ref }}
