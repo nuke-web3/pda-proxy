@@ -3,8 +3,8 @@ name: Docker Build & Publish
 # Trigger on new semantic version tags
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
