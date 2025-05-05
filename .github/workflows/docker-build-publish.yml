@@ -1,26 +1,43 @@
 name: Docker Build & Publish
 
-# Trigger on new semantic version tags
+name: Build and Push Docker Image to GHCR
+
 on:
   push:
-    branches:
-      - sysrex/test_ci
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "The checkout reference (ie tag, branch, sha)"
-        required: true
-        type: string
+    branches: sysrex/test_ci  # or 'master'
+
+permissions:
+  contents: read
+  packages: write  # ✅ required to push to GHCR
 
 jobs:
-  docker-security-build:
-    permissions:
-      contents: write
-      packages: write
-    uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.6.3 # yamllint disable-line rule:line-length
-    with:
-      runner-label: dev1-l
-      buildArgs: "TARGETOS=linux TARGETARCH=amd64"
-      dockerfile: Dockerfile
-      checkout_ref: ${{ github.event.inputs.ref }}
-    secrets: inherit
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
