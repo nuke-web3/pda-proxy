@@ -19,7 +19,7 @@ jobs:
       packages: write
     uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.6.3 # yamllint disable-line rule:line-length
     with:
-      runner-label: self-hosted
+      build-args: "TARGETOS=linux TARGETARCH=amd64"
       dockerfile: Dockerfile
       checkout_ref: ${{ github.event.inputs.ref }}
     secrets: inherit
