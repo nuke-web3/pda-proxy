@@ -1,7 +1,5 @@
 name: Docker Build & Publish
 
-name: Build and Push Docker Image to GHCR
-
 on:
   push:
     branches: sysrex/test_ci  # or 'master'
@@ -12,7 +10,7 @@ permissions:
 
 jobs:
   docker:
-    runs-on: ubuntu-latest
+    runs-on: dev1-l
 
     steps:
       - name: Checkout repository
