@@ -1,8 +1,10 @@
 name: Docker Build & Publish
 
-# Trigger on push to any branch
+# Trigger on new semantic version tags
 on:
   push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       ref:
@@ -11,12 +13,12 @@ on:
         type: string
 
 jobs:
-  runs_on: self-hosted
   docker-security-build:
-    uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.6.2 # yamllint disable-line rule:line-length
     permissions:
       contents: write
       packages: write
+    uses: celestiaorg/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.6.3 # yamllint disable-line rule:line-length
+    runs-on: self-hosted
     with:
       dockerfile: Dockerfile
       checkout_ref: ${{ github.event.inputs.ref }}
