@@ -4,7 +4,7 @@ name: Docker Build & Publish
 on:
   push:
     branches:
-      - main
+      - sysrex/ci_test
   workflow_dispatch:
     inputs:
       ref:
