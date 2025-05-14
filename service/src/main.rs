@@ -201,8 +201,8 @@ async fn main() -> Result<()> {
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
                                     debug!(
-                                        "Forwarding (maybe modified) `{}` --> DA",
-                                        request_method
+                                        "Forwarding (maybe modified) `{}` --> DA: {:?}",
+                                        request_method, wrapped_req
                                     );
                                     let returned = match celestia_client.request(wrapped_req).await
                                     {
@@ -210,14 +210,19 @@ async fn main() -> Result<()> {
                                             outbound_handler(resp, request_method.to_owned())
                                                 .await
                                                 .unwrap_or_else(|e| {
-                                                    internal_error_response(e.to_string())
+                                                    internal_error_response(format!(
+                                                        "Outbound Handler: {}",
+                                                        e
+                                                    ))
                                                 })
                                         }
-                                        Err(e) => internal_error_response(e.to_string()),
+                                        Err(e) => {
+                                            internal_error_response(format!("DA Client: {}", e))
+                                        }
                                     };
                                     debug!(
-                                        "Responding (maybe modified) `{}` <-- DA",
-                                        request_method
+                                        "Responding (maybe modified) `{}` <-- DA: {:?}",
+                                        request_method, returned
                                     );
                                     anyhow::Ok(returned)
                                 }
