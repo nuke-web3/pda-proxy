@@ -14,6 +14,7 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use log::{debug, error, info, warn};
 use rustls::ServerConfig;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -180,13 +181,13 @@ async fn main() -> Result<()> {
                         let celestia_client = celestia_client.clone();
 
                         async move {
-                            if let Some(auth_value) = plaintext_req.headers().get("authorization") {
-                                let auth_str = auth_value.to_str().unwrap_or("");
-                                if !auth_str.starts_with("Bearer ") {
-                                    return Ok(missing_auth_response());
-                                }
-                            } else {
-                                return Ok(missing_auth_response());
+                            let auth_header = plaintext_req
+                                .headers()
+                                .get("authorization")
+                                .and_then(|h| h.to_str().ok());
+
+                            if auth_header.map_or(true, |auth| !auth.starts_with("Bearer ")) {
+                                return Ok(bad_auth_response());
                             }
 
                             let mut request_method: String = Default::default();
@@ -351,45 +352,37 @@ async fn outbound_handler(
     let (mut parts, body_stream) = resp.into_parts();
     let mut body_buf = body_stream.collect().await?.aggregate();
     let body_bytes = body_buf.copy_to_bytes(body_buf.remaining());
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
 
+    debug!("Raw upstream response: {:?}", body_bytes);
+
+    let status = parts.status;
+
+    if status == StatusCode::UNAUTHORIZED {
+        return Ok(bad_auth_response());
+    }
+
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    // (Optional) handle blob.Get/All for decryption etc.
     match request_method.as_str() {
-        // <https://node-rpc-docs.celestia.org/#blob.Get>
         "blob.Get" => {
-            debug!("blob.Get intercept");
             if let Some(result_raw) = body_json.get("result") {
-                debug!("{result_raw:?}");
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
-                // TODO: SP1 Verify encryption & anchors proof, Decrypt data
-                // TODO: Return {custom?} error and/or decrypted data
                 debug!("{blob:?}");
-            } else {
-                debug!("Forwarding `blob.Get` error");
             }
         }
-        // <https://node-rpc-docs.celestia.org/#blob.Get>
         "blob.GetAll" => {
-            debug!("blob.GetAll intercept");
             if let Some(result_raw) = body_json.get("result") {
-                debug!("{result_raw:?}");
                 let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
                 for blob in blobs {
                     debug!("{blob:?}");
                 }
-            } else {
-                debug!("Forwarding `blob.GetAll` error");
             }
         }
-        &_ => {}
+        _ => {}
     }
 
     let json = serde_json::to_string(&body_json)?;
-
-    // MISSION CRITICAL
-    // Without it, the request will likely hang or fail,
-    // I am assuming it's recalculated if missing, as it works
     parts.headers.remove("content-length");
-
     let new_body = Full::new(Bytes::from(json))
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
@@ -413,7 +406,7 @@ fn internal_error_response(error: String) -> Response<BoxBody> {
 
 /// The upstream node will drop any call without a correct
 /// Bearer: <|Auth|Write|Read JWT> set in the header!
-fn missing_auth_response() -> Response<BoxBody> {
+fn bad_auth_response() -> Response<BoxBody> {
     warn!("Got Request with missing or malformed Authorization header.");
     let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "error": { "message": "Missing or malformed Authorization header. Expected format: Bearer <token>" } }"#;
     new_response_from(raw_json, StatusCode::UNAUTHORIZED)
