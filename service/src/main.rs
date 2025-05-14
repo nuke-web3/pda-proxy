@@ -3,7 +3,7 @@ use celestia_types::Blob;
 use hex::FromHex;
 use http_body_util::{BodyExt, Full};
 use hyper::{
-    Request, Response,
+    Request, Response, StatusCode,
     body::{Buf, Bytes, Incoming as IncomingBody},
     server::conn::http1,
     service::service_fn,
@@ -59,7 +59,6 @@ async fn main() -> Result<()> {
     let finished_db = db.open_tree("finished")?;
 
     // TLS setup
-    // TODO: use real certs and keys!!
     let _ = rustls::crypto::ring::default_provider().install_default();
     let tls_certs_path = std::env::var("TLS_CERTS_PATH").expect("TLS_CERTS_PATH env var required");
     let tls_certs = load_certs(&tls_certs_path)?;
@@ -88,7 +87,7 @@ async fn main() -> Result<()> {
         );
         https_builder.https_only().enable_http1().build()
     };
-    let celesita_client: Client<_, BoxBody> =
+    let celestia_client: Client<_, BoxBody> =
         Client::builder(TokioExecutor::new()).build(https_or_http_connector);
 
     info!("Building clients and service setup");
@@ -151,7 +150,7 @@ async fn main() -> Result<()> {
         let (stream, _) = listener.accept().await?;
         let tls_acceptor = tls_acceptor.clone();
         let runner = pda_runner.clone();
-        let celestia_client = celesita_client.clone();
+        let celestia_client = celestia_client.clone();
 
         tokio::spawn(async move {
             match tls_acceptor.accept(stream).await {
@@ -181,7 +180,6 @@ async fn main() -> Result<()> {
                         let celestia_client = celestia_client.clone();
 
                         async move {
-                            // Must have auth token!
                             if let Some(auth_value) = plaintext_req.headers().get("authorization") {
                                 let auth_str = auth_value.to_str().unwrap_or("");
                                 if !auth_str.starts_with("Bearer ") {
@@ -203,21 +201,30 @@ async fn main() -> Result<()> {
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
                                     debug!(
-                                        "Forwarding (maybe modified) `{}` --> DA",
-                                        request_method
+                                        "Forwarding (maybe modified) `{}` --> DA: {:?}",
+                                        request_method, wrapped_req
                                     );
-                                    let returned = celestia_client.request(wrapped_req).await?;
-                                    let wrapped_resp =
-                                        outbound_handler(returned, request_method.to_owned())
-                                            .await
-                                            .unwrap_or_else(|e| {
-                                                internal_error_response(e.to_string())
-                                            });
+                                    let returned = match celestia_client.request(wrapped_req).await
+                                    {
+                                        Ok(resp) => {
+                                            outbound_handler(resp, request_method.to_owned())
+                                                .await
+                                                .unwrap_or_else(|e| {
+                                                    internal_error_response(format!(
+                                                        "Outbound Handler: {}",
+                                                        e
+                                                    ))
+                                                })
+                                        }
+                                        Err(e) => {
+                                            internal_error_response(format!("DA Client: {}", e))
+                                        }
+                                    };
                                     debug!(
-                                        "Responding (maybe modified) `{}` <-- DA",
-                                        request_method
+                                        "Responding (maybe modified) `{}` <-- DA: {:?}",
+                                        request_method, returned
                                     );
-                                    anyhow::Ok(wrapped_resp)
+                                    anyhow::Ok(returned)
                                 }
                                 None => Ok(pending_response()),
                             }
@@ -392,49 +399,33 @@ async fn outbound_handler(
 
 /// Job is in queue, we are waiting on it to finish
 fn pending_response() -> Response<BoxBody> {
-    let raw_json = r#"
-    {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "status": "Verifiable encryption processing... Call back for result"
-        }
-    }"#;
-    new_response_from(raw_json)
+    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+    new_response_from(raw_json, StatusCode::ACCEPTED)
 }
 
-/// Map an error String into a JSON response body
+/// Create an internal error response in JSON-RPC 2.0 format.
 fn internal_error_response(error: String) -> Response<BoxBody> {
-    let raw_json =
-        format!("{{ \"id\": 1, \"jsonrpc\": \"2.0\", \"status\": \"Internal Error: {error}\" }}")
-            .to_string();
-    new_response_from(raw_json.as_str())
+    let raw_json = format!(
+        r#"{{ "id": 1, "jsonrpc": "2.0", "error": {{ "message": "Internal error: {error}" }} }}"#
+    );
+    new_response_from(&raw_json, StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 /// The upstream node will drop any call without a correct
 /// Bearer: <|Auth|Write|Read JWT> set in the header!
 fn missing_auth_response() -> Response<BoxBody> {
     warn!("Got Request with missing or malformed Authorization header.");
-    let raw_json = r#"
-    {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "error": {
-            "message": "Missing or malformed Authorization header. Expected format: Bearer <token>"
-        }
-    }"#;
-    new_response_from(raw_json)
+    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "error": { "message": "Missing or malformed Authorization header. Expected format: Bearer <token>" } }"#;
+    new_response_from(raw_json, StatusCode::UNAUTHORIZED)
 }
 
-fn new_response_from(
-    raw_json: &str,
-) -> Response<http_body_util::combinators::BoxBody<Bytes, GenericError>> {
-    let owned_string = raw_json.to_owned();
-    let new_body = Full::new(Bytes::from(owned_string))
-        .map_err(|err: std::convert::Infallible| match err {})
+/// Helper function to build a JSON response with a given status code.
+fn new_response_from(raw_json: &str, status: StatusCode) -> Response<BoxBody> {
+    let body = Full::new(Bytes::from(raw_json.to_owned()))
+        .map_err(|_: std::convert::Infallible| unreachable!())
         .boxed();
 
-    let mut response = Response::new(BoxBody::new(new_body));
-    *response.status_mut() = hyper::StatusCode::UNAUTHORIZED;
-
+    let mut response = Response::new(BoxBody::new(body));
+    *response.status_mut() = status;
     response
 }

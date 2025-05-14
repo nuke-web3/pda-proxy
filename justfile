@@ -67,7 +67,6 @@ docker-run:
     # TODO: support docker rootless!
     # FIXME: files with relative paths accross .env file!
     docker run --rm -it \
-      --user $(id -u):$(id -g) \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v ./service/static:/app/static \
       -v $PDA_DB_PATH:$PDA_DB_PATH \
@@ -117,11 +116,13 @@ mocha-local-auth:
 
 # Test blob.Get
 curl-blob-get:
-    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' 127.0.0.1:3001
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' \
+    https://127.0.0.1:26657 \
+    --insecure
 
 # Test blob.Submit
 curl-blob-submit:
     curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
          --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
          https://127.0.0.1:26657 \
-         --insecure -v
+         --insecure

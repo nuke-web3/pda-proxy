@@ -10,7 +10,7 @@ source ../.env
 
 require_dot_env_vars TLS_DOMAIN TLS_EMAIL
 
-TLS_CERTS_PATH="/etc/letsencrypt/live/$PTLS_DOMAINP/fullchain.pem"
+TLS_CERTS_PATH="/etc/letsencrypt/live/${TLS_DOMAIN}/fullchain.pem"
 TLS_KEY_PATH="/etc/letsencrypt/live/${TLS_DOMAIN}/privkey.pem"
 
 export TLS_CERTS_PATH
