@@ -98,7 +98,7 @@ impl PdaRunner {
                             return Err(PdaRunnerError::InternalError(format!("{error:?}")));
                         }
                         Some(retry_status) => {
-                            warn!("Job is Retryable Failure, returning status & retrying");
+                            warn!("Job is Retry-able Failure, returning status & retrying");
                             // We retry errors on each call
                             // for a specific [Job] by sending to the queue
                             match self.send_job_with_new_status(job_key, *retry_status, job) {
@@ -222,7 +222,7 @@ impl PdaRunner {
                         Err(e) => {
                             error!("0x{} - Failed progressing job: {e}", hex::encode(&job_key));
                             job_status = JobStatus::Failed(
-                                e, None, // TODO: should this be retryable?
+                                e, None, // TODO: should this be retry-able?
                             );
                             self.finalize_job(&job_key, job_status)?;
                         }
@@ -289,7 +289,7 @@ impl PdaRunner {
 
     /// Helper function to handle error from a SP1 NetworkProver Clients.
     /// Will finalize the job in an [JobStatus::Failed] state,
-    /// that may be retryable.
+    /// that may be retry-able.
     fn handle_zk_client_error(
         &self,
         zk_client_error: &SP1NetworkError,

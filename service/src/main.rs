@@ -59,7 +59,6 @@ async fn main() -> Result<()> {
     let finished_db = db.open_tree("finished")?;
 
     // TLS setup
-    // TODO: use real certs and keys!!
     let _ = rustls::crypto::ring::default_provider().install_default();
     let tls_certs_path = std::env::var("TLS_CERTS_PATH").expect("TLS_CERTS_PATH env var required");
     let tls_certs = load_certs(&tls_certs_path)?;
@@ -88,7 +87,7 @@ async fn main() -> Result<()> {
         );
         https_builder.https_only().enable_http1().build()
     };
-    let celesita_client: Client<_, BoxBody> =
+    let celestia_client: Client<_, BoxBody> =
         Client::builder(TokioExecutor::new()).build(https_or_http_connector);
 
     info!("Building clients and service setup");
@@ -151,7 +150,7 @@ async fn main() -> Result<()> {
         let (stream, _) = listener.accept().await?;
         let tls_acceptor = tls_acceptor.clone();
         let runner = pda_runner.clone();
-        let celestia_client = celesita_client.clone();
+        let celestia_client = celestia_client.clone();
 
         tokio::spawn(async move {
             match tls_acceptor.accept(stream).await {
@@ -181,7 +180,6 @@ async fn main() -> Result<()> {
                         let celestia_client = celestia_client.clone();
 
                         async move {
-                            // Must have auth token!
                             if let Some(auth_value) = plaintext_req.headers().get("authorization") {
                                 let auth_str = auth_value.to_str().unwrap_or("");
                                 if !auth_str.starts_with("Bearer ") {
