@@ -32,7 +32,7 @@ initial-config-installs:
         echo -e "✅ cargo-prove installed\n     ⚠️👀NOTE: Check you have the correct version needed for this project!"; \
     fi
 
-# Build only the zkVM ELF program in release mode (optimized)
+# Build only the zkVM ELF program in release mode (optimized, reproducable w/ docker)
 build-elf:
     if ! {{ path_exists(cargo-prove-path) }}; then \
         echo -e "⛔ Missing zkVM Compiler.\nRun \`just initial-config-installs\` to prepare your environment"; \
@@ -41,7 +41,8 @@ build-elf:
     source {{ env-settings }}; \
     if [ ! -f "$ZK_PROGRAM_ELF_PATH" ]; then \
         echo -e "Can't find ELF at \`$ZK_PROGRAM_ELF_PATH\`.\nAttempting to build it..."; \
-        RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" cargo prove build -p chacha-program; \
+        RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" \
+        cargo prove build --docker -p chacha-program; \
     else \
         echo "✅ ELF Exists, skipping SP1 build"; \
     fi
