@@ -4,7 +4,7 @@ default-members = ["service"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Nuke <nuke-web3@proton.me>"]
 license = "MIT"
@@ -12,7 +12,7 @@ homepage = "https://celestia.org"
 repository = "https://github.com/celestiaorg/eq-service"
 
 [workspace.dependencies]
-zkvm-common = { path = "zkVM/common", default-features = false, version = "0.1.0" }
+zkvm-common = { path = "zkVM/common", default-features = false, version = "0.1.1" }
 
 anyhow = "1.0"
 hex = "0.4"
