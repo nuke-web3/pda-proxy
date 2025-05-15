@@ -32,52 +32,7 @@ It's possible to change these, but requires upstream involvement:
 
 ## Architecture
 
-```mermaid
----
-config:
-  look: handDrawn
-  theme: dark
-  layout: elk
----
-flowchart TD
- subgraph VE_Container["zkVM or TEE"]
-        Encrypt["Encryption<br>(ChaCha, AES, ...)"]
-  end
- subgraph VE_Out_Seal["Verifiable Encrypted Data"]
-        VE_Out["Encrypted Data"]
-        VE_Hash["Input Data Anchor<br>(Hash)"]
-        VE_Seal["Seal/Attestation"]
-  end
- subgraph P_Container["zkVM or TEE"]
-        Program["Program<br>(DEX, Sequencer)"]
-  end
- subgraph P_Out_Seal["Verifiable Program Output"]
-        P_Out["Program Output"]
-        P_Hash["Input Data Anchor<br>(Hash)"]
-        P_Seal["Seal/Attestation"]
-  end
- subgraph Chain["Blockchain<br>{Ethereum}"]
-        App_Contracts["App Contract"]
-        Blobstream["Blobstream"]
-  end
-    In["{Confidential}<br>Input Data"] --> Encrypt & Program
-    Encrypt --> VE_Out_Seal
-    Program --> P_Out_Seal
-    VE_Hash == Identical === P_Hash
-    Key(["{Confidential}<br>Encryption Key"]) -- Provided as input<br>or embedded ---> Encrypt
-    VE_Out_Seal --> DA["DA<br>{Celestia}"]
-    DA --> Blobstream
-    P_Out_Seal --> App_Contracts
-    Blobstream -. "Confirm DA for<br>Encrypted Data" .-> App_Contracts
-    Chain -. Chain State .-> Program
-    Key_Recover["Key Recovery Process<br>(MPC, Threshold, Etc.)"] -.-> Key
-    App_Contracts@{ shape: doc}
-    Blobstream@{ shape: doc}
-    In@{ shape: docs}
-    DA@{ shape: cyl}
-    Key_Recover@{ shape: h-cyl}
-    Key@{ shape: dbl-circ}
-```
+![Verifiable Encryption Diagram](./doc/assets/verifiable-encryption.drawio.svg)
 
 The PDA proxy depends on a connection to:
 
