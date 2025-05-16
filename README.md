@@ -54,21 +54,21 @@ sequenceDiagram
     participant Celestia Node
     note right of JSON RPC Client: **** ENCRYPT **********************
     JSON RPC Client->>+PDA Proxy: blob.Submit(blobs, options)<br>{AUTH_TOKEN in header}
-    PDA Proxy->>PDA Proxy: Job Processing...<br>{If no DB enrty, start new zkVM Job}
-    PDA Proxy->>-JSON RPC Client: Respose{"Call back"}
+    PDA Proxy->>PDA Proxy: Job Processing...<br>{If no DB entry, start new zkVM Job}
+    PDA Proxy->>-JSON RPC Client: Response{"Call back"}
     PDA Proxy->>PDA Proxy: ...Job runs to completion...
     JSON RPC Client->>+PDA Proxy:  blob.Submit(blobs, options)<br>{AUTH_TOKEN in header}
     PDA Proxy->>PDA Proxy: Query Job DB<br>Done!<br>{Job Result cached}
     PDA Proxy->>Celestia Node: blob.Submit(V. Encrypt. blobs, options)
-    Celestia Node->>PDA Proxy: Respose{Inclusion Block Height}
-    PDA Proxy->>-JSON RPC Client: Respose{Inclusion Block Height}
+    Celestia Node->>PDA Proxy: Response{Inclusion Block Height}
+    PDA Proxy->>-JSON RPC Client: Response{Inclusion Block Height}
 
     note right of JSON RPC Client: **** DECRYPT **********************
 
     JSON RPC Client->>+PDA Proxy: blob.Get(height, namespace, commitment)
     PDA Proxy->>Celestia Node: <Passthrough>
     Celestia Node->>PDA Proxy: Response{namespace,data,<br>share_version,commitment,index}
-    PDA Proxy->>PDA Proxy: *Try* deserialize & decrypt<br>{Fail -> Passthrough}
+    PDA Proxy->>PDA Proxy: *Try* deserialize & decrypt
     PDA Proxy->>-JSON RPC Client: *Success* -> Response{...,decrypted bytes,...}
     PDA Proxy->>JSON RPC Client: *Failure* -> <Passthrough>
 
