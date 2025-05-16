@@ -1,66 +1,100 @@
 # Verifiable Encryption
 
-### _A New Primitive Enabling Private Data Availability_
+### _A New Primitive Empowering Private Data Availability_
 
-> "Don't trust. Verify."
+> “Don’t trust. Verify.”
 
-In this document, we introduce Verifiable Encryption (VE) schema and how they enable Private Data Availability (PDA).
+This document introduces **Verifiable Encryption (VE)** and explores how it enables **Private Data Availability (PDA)** - a transformative new primitive for secure, decentralized systems.
 
 ## Verifiable Encryption
 
-Encrypted data (ciphertext) should reveal **_nothing_** about the encrypted data (plaintext) it was created from, thus you _cannot verify anything about the plaintext_ without decrypting it.
-Therefore, one must _fully trust those that can decrypt_ about anything the plaintext relates to.
-We want to _constrain_ the plaintext, key(s) used, encryption algorithm, etc. when generating ciphertext such that _the public can verify_ that it is decrypt-able to some plaintext with specific properties _without the ability to decrypt it_.
+Traditional encryption ensures that ciphertext reveals **nothing** about the underlying plaintext.
+This guarantees privacy, but at a cost: **you can’t verify anything about the data without decrypting it**.
+
+This creates a trust bottleneck - **you must fully trust those who hold decryption keys** to act honestly.
+But what if we could shift some of that trust to verification?
+
+**Verifiable Encryption (VE)** makes this possible.
+By introducing constraints on:
+
+- the plaintext,
+- the encryption algorithm,
+- and the keys used,
+
+VE allows **public verifiability** of claims about the data **without decrypting it**.
+That means anyone can check that encrypted data meets specific criteria - without learning what that data is.
 
 ## Data Availability
 
-When data is required for a protocol's safety and/or functionality, we demand robust guarantees on _public_ Data Availability (DA).
-So even in hostile conditions trying to stop others from accessing critical data, a protocol can continue to operate.
-But in many cases, that data may be _too sensitive_ for the whole world to know.
-We must find a way to _selectively disclose specific aspects_ only to _prearranged parties_ under specific conditions.
+Many protocols rely on **Data Availability (DA)** for safety and liveness guarantees.
+In adversarial conditions - such as censorship or outages - it is critical that data be **publicly available**.
 
-## With our powers combined...
+However, not all data should be exposed to the world.
 
-PDA becomes a powerful new primitive that is highly configurable with VE.
-Integrating with any existing or novel Key Management Systems (KMS), one is able to define the conditions that surrounding encryption key recovery and distribution.
-Applying VE with KMS keys allows anyone (person, smart contract, etc.) to verify that some critical data is available (although encrypted) _and_ the conditions required to access it.
+Some datasets are **too sensitive** for full transparency.
+The challenge: **How can we ensure critical data is available, yet only selectively disclosed under prearranged conditions**?
+
+## The Power of VE + PDA
+
+By combining **Verifiable Encryption** with **Private Data Availability**, we unlock a powerful new primitive: **auditable yet private data**.
+
+With integration into **existing or novel Key Management Systems (KMS)**, VE allows one to define:
+
+- **who can access** decryption keys,
+- **under what conditions**,
+- and **what can be verified** without access.
+
+This means:
+
+- Anyone (users, smart contracts, off-chain agents) can verify that encrypted data is available and satisfies certain properties.
+- Only authorized parties can decrypt and access the sensitive contents.
 
 ## Use Cases
 
-The authors have a few use cases described below, but we would **love** to hear what you might want to use VE and/or PDA for!
-Please [open up an issue](https://github.com/celestiaorg/pda-proxy/issues) with feature requests and/or use case ideas!
+We’ve outlined a few use cases below - but would love to hear your ideas too!
+💡 [Open an issue](https://github.com/celestiaorg/pda-proxy/issues) to share feature requests or novel applications of VE and PDA.
 
-### _Programmable Privacy Web3 dApps_
+### 🌐 _Programmable Privacy for Web3 dApps_
 
-Strongly related to the exciting field of ["local-first access control"](https://www.inkandswitch.com/keyhive/notebook/), VE and PDA enable secure collaboration.
-As chain data is shared to the entire network and easily accessible via indexers etc, we must use _encryption at rest_ to provide means of access control and selective disclosure.
+VE and PDA align closely with the principles of [local-first access control](https://www.inkandswitch.com/keyhive/notebook/), enabling **secure collaboration** across decentralized applications.
 
-#### Concrete Use Cases
+In a world where chain data is globally replicated and indexed, **encryption at rest** becomes essential for access control and selective disclosure.
 
-- PDA as a Data Base for collaborative dApps with fine grained access control.
-- Trustless sale of data via PDA and escrow contracts.
-  See the [Stock0 hackathon project](https://dorahacks.io/buidl/14098) for inspiration!
-- Private Rollups with **programmable cryptography** enabling [partial or fully obfuscated state](https://0xparc.org/blog/programmable-cryptography-1).
-  With a [proxy service](../README.md), any exisitng DA user can easily move to PDA!
+#### Example Applications
 
-### _Verifiable Private Backups_
+- **PDA as a database** for collaborative dApps with fine-grained access control.
+- **Trustless data markets**, where data is sold using PDA + escrow smart contracts.
+  ➤ _See the [Stock0 hackathon project](https://dorahacks.io/buidl/14098) for inspiration!_
+- **Private rollups** with programmable cryptography, enabling [obfuscated state](https://0xparc.org/blog/programmable-cryptography-1).
+- **Drop-in support** for existing DA users via a [proxy service](../README.md), simplifying migration to PDA.
 
-Critical data published publicly via PDA can be recovered _but only by predefined methods to decrypt it_.
-Thus nothing is revealed about the data backed up, but anyone can audit that it exists and it is possible to recover it.
+### 🔐 _Verifiable Private Backups_
 
-#### Concrete Use Cases
+With PDA, sensitive data can be publicly published in encrypted form, with **predefined methods for recovery** - without revealing its contents.
 
-- Audits with sensitive data held with PDA such that it cannot be withheld and - although hidded from the public - can be recovered as needed.
-- "Disaster" recovery where critical data is guaranteed to be obtainable in an encrypted form, with know methods to decrypt it defined.
+This unlocks a new class of **verifiable, resilient backups**.
+
+#### Example Applications
+
+- **Auditable storage**: Confidential datasets can be verified to exist and be recoverable, while remaining hidden from the public.
+
+- **Disaster recovery**: Critical encrypted data is guaranteed to be retrievable using known decryption methods, ensuring survivability without sacrificing privacy.
 
 ## Example Architecture
 
-The **anchor** provides a reference to **connect any protocol** via a **proof** that some **_private_ data was made available**.
+The **anchor** acts as a bridge, connecting **any protocol** to a **proof** that some _private_ data was made available.
 
 ![Verifiable Encryption Diagram](./assets/verifiable-encryption.drawio.svg)
 
-## Future Work & Further Reading
+## Future Work & Research Directions
 
-Today there are limitations on the implentations of VE for PDA, but those should be relaxed significantly over time, enabling even more enticing uses for it!
-Most notably there are hybrid scheme using a blend of TEE, MCP, and ZK Proof tooling that can bring about significant performance gains and confidential compute possibilities to allow for outsourcing and parallelization of PDA related tasks. 
-We describe and expand on [research here](https://docs.google.com/document/d/1XZyuOxdMm5INcHwQZOZ8ALRk_YkvicNwQHSfOVs8hoM/)
+While VE for PDA is still evolving, the potential is enormous.
+Current implementations have limitations, but these are rapidly being addressed by:
+
+- Enabling performance improvements, **confidential compute**, and **scalable parallelization** of PDA workflows.
+- **Hybrid systems** combining:
+  - Trusted Execution Environments (TEEs),
+  - Multi-Party Computation (MPC),
+  - and Zero-Knowledge Proofs (ZKPs),
+
+For deeper insights, see our ongoing [research discussion here](https://docs.google.com/document/d/1XZyuOxdMm5INcHwQZOZ8ALRk_YkvicNwQHSfOVs8hoM/).
