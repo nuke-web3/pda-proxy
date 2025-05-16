@@ -30,9 +30,9 @@ It's possible to change these, but requires upstream involvement:
 
 > Please [open an issue](https://github.com/celestiaorg/pda-proxy/issues) if you have any requests!
 
-## Architecture
+## Interact
 
-![Verifiable Encryption Diagram](./doc/assets/verifiable-encryption.drawio.svg)
+First you need to [configure](#configure) your environment and nodes.
 
 The PDA proxy depends on a connection to:
 
@@ -40,14 +40,39 @@ The PDA proxy depends on a connection to:
    - Submit and retrieve (verifiable encrypted) blob data.
 1. (Optional) [Succinct prover network](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network) as a provider to generate Zero-Knowledge Proofs (ZKPs) of data existing on Celestia.
    _See the [ZKP program](./zkVM/sp1/program-chacha) for details on what is proven._
+Then any HTTP1 client works to send [Celestial JSON RPC](https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia) calls to the proxy:
 
-## Interact
+```sh
+# Proxy running on 127.0.0.1:26657
+# See: <https://mocha.celenium.io/blob?commitment=S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA=&hash=AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=&height=4499999>
+
+source .env
+# blob.Get
+curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
+     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Get", "params": [ 4499999, "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=", "S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA="] }' \
+     $PDA_SOCKET
+# blob.GetAll
+curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
+     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.GetAll", "params": [ 4499999, [ "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=" ] ] }' \
+     $PDA_SOCKET
+# blob.Submit (dummy data)
+# Note: send "{}" as empty `tx_config` object, so the node uses it's default key to sign & submit to Celestia
+curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
+     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
+     https://$PDA_SOCKET \
+     --verbose \
+     --insecure
+    # ^^^^ DO NOT use insecure TLS in real scenarios!
+# blob.Submit (example input ~1.5MB)
+cd scripts
+./test_example_data_file_via_curl.sh
+```
+
+Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides/submit-data#api) to build around a PDA proxy.
+
+### Request Flow
 
 ```mermaid
----
-config:
-  theme: redux-dark-color
----
 sequenceDiagram
     participant JSON RPC Client
     participant PDA Proxy
@@ -79,38 +104,6 @@ sequenceDiagram
     Celestia Node->>PDA Proxy: <Passthrough>
     PDA Proxy->>-JSON RPC Client: Response{<Normal API response}
 ```
-
-First you need to [configure](#configure) your environment and nodes.
-
-Then any HTTP1 client works to send [Celestial JSON RPC](https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia) calls to the proxy:
-
-```sh
-# Proxy running on 127.0.0.1:26657
-# See: <https://mocha.celenium.io/blob?commitment=S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA=&hash=AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=&height=4499999>
-
-source .env
-# blob.Get
-curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
-     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Get", "params": [ 4499999, "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=", "S2iIifIPdAjQ33KPeyfAga26FSF3IL11WsCGtJKSOTA="] }' \
-     $PDA_SOCKET
-# blob.GetAll
-curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
-     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.GetAll", "params": [ 4499999, [ "AAAAAAAAAAAAAAAAAAAAAAAAAFHMGnPWX5X2veY=" ] ] }' \
-     $PDA_SOCKET
-# blob.Submit (dummy data)
-# Note: send "{}" as empty `tx_config` object, so the node uses it's default key to sign & submit to Celestia
-curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
-     --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
-     https://$PDA_SOCKET \
-     --verbose \
-     --insecure
-    # ^^^^ DO NOT use insecure TLS in real scenarios!
-# blob.Submit (example input ~1.5MB)
-cd scripts
-./test_example_data_file_via_curl.sh
-```
-
-Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides/submit-data#api) to build around a PDA proxy.
 
 ## Operate
 
