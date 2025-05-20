@@ -112,5 +112,5 @@ pub fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
 }
 
 pub fn map_io_error(err: String) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
+    io::Error::other(err)
 }
