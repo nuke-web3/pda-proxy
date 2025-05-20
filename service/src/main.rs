@@ -14,7 +14,6 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use log::{debug, error, info, warn};
 use rustls::ServerConfig;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -186,7 +185,7 @@ async fn main() -> Result<()> {
                                 .get("authorization")
                                 .and_then(|h| h.to_str().ok());
 
-                            if auth_header.map_or(true, |auth| !auth.starts_with("Bearer ")) {
+                            if auth_header.is_none_or(|auth| !auth.starts_with("Bearer ")) {
                                 return Ok(bad_auth_response());
                             }
 
