@@ -64,6 +64,7 @@ In a world where chain data is globally replicated and indexed, **encryption at 
 
 - **PDA as a database** for collaborative dApps with fine-grained access control.
 - **Private rollups** with programmable cryptography, enabling [obfuscated state](https://0xparc.org/blog/programmable-cryptography-1).
+- **Private bridging and escrow** sending verifibly correctm but private messages around web2 and/or web3 apps.
 - **Drop-in support** for existing DA users via a [proxy service](../README.md), simplifying migration to PDA.
 
 ### _Trustless Data Markets_
@@ -73,11 +74,10 @@ With VE, PDA, and escrow contracts you can construct protocols to build trustles
 ```mermaid
 flowchart LR
     Photo["Photo"] -- "data<br>(private)" --> zkVM_Algo["zkVM Photo tranform algo"]
-    zkVM_Algo -- "proof" --> Contract["Marketplace contract"]
-    Photo -- "data" --> zkVM_VE["Verifiable Encryption"]
-    zkVM_VE -- "encrypted<br>data" --> Celestia["Celestia"]
-    Celestia -- header --> Blobstream["Blobstream"]
-    Blobstream <-- verify --> Contract
+    zkVM_Algo -- "proof of transform w/ VE anchor" --> Contract["Marketplace contract"]
+    Photo -- "*VE* data" --> Celestia["Celestia"]
+    Celestia -- "header" --> Blobstream["Blobstream"]
+    Blobstream <-- "verify VE anchor and DA" --> Contract
 ```
 
 > See the [Stock0](https://dorahacks.io/buidl/14098) media market hackathon project [diagram inspired by](https://docs.google.com/presentation/d/1qq1QXSBcThOjaQ2OcEyS8cwNyAHs3SnC76YrBMAYENk)
