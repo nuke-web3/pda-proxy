@@ -54,7 +54,7 @@ This means:
 We’ve outlined a few use cases below - but would love to hear your ideas too!
 💡 [Open an issue](https://github.com/celestiaorg/pda-proxy/issues) to share feature requests or novel applications of VE and PDA.
 
-### 🌐 _Programmable Privacy for Web3 dApps_
+### _Programmable Privacy for Web3 dApps_
 
 VE and PDA align closely with the principles of [local-first access control](https://www.inkandswitch.com/keyhive/notebook/), enabling **secure collaboration** across decentralized applications.
 
@@ -63,12 +63,29 @@ In a world where chain data is globally replicated and indexed, **encryption at 
 #### Example Applications
 
 - **PDA as a database** for collaborative dApps with fine-grained access control.
-- **Trustless data markets**, where data is sold using PDA + escrow smart contracts.
-  ➤ _See the [Stock0 hackathon project](https://dorahacks.io/buidl/14098) for inspiration!_
 - **Private rollups** with programmable cryptography, enabling [obfuscated state](https://0xparc.org/blog/programmable-cryptography-1).
 - **Drop-in support** for existing DA users via a [proxy service](../README.md), simplifying migration to PDA.
 
-### 🔐 _Verifiable Private Backups_
+### _Trustless Data Markets_
+
+With VE, PDA, and escrow contracts you can construct protocols to build trustless exchange of data access
+
+```mermaid
+flowchart LR
+    Photo["Photo"] -- "data<br>(private)" --> zkVM_Algo["zkVM Photo tranform algo"]
+    zkVM_Algo -- "proof" --> Contract["Marketplace contract"]
+    Photo -- "data" --> zkVM_VE["Verifiable Encryption"]
+    zkVM_VE -- "encrypted<br>data" --> Celestia["Celestia"]
+    Celestia -- header --> Blobstream["Blobstream"]
+    Blobstream <-- verify --> Contract
+```
+
+> See the [Stock0](https://dorahacks.io/buidl/14098) media market hackathon project [diagram inspired by](https://docs.google.com/presentation/d/1qq1QXSBcThOjaQ2OcEyS8cwNyAHs3SnC76YrBMAYENk)
+
+### _Verifiable Private Backups_
+
+> NOTE: Celestia does _not_ guarantee that data will be avalible forever!
+> See [the docs on retrievability](https://docs.celestia.org/learn/retrievability#data-retrievability-and-pruning-in-celestia-node) for the latest safe assumptions to use.
 
 With PDA, sensitive data can be publicly published in encrypted form, with **predefined methods for recovery** - without revealing its contents.
 
@@ -86,8 +103,9 @@ The **anchor** acts as a bridge, connecting **any protocol** to a **proof** that
 
 ![Verifiable Encryption Diagram](./assets/verifiable-encryption.drawio.svg)
 
-## Future Work & Research Directions
+## Future Work and Research Directions
 
+[Future Work & Research Directions](#Future Work & Research Directions)
 While VE for PDA is still evolving, the potential is enormous.
 Current implementations have limitations, but these are rapidly being addressed by:
 

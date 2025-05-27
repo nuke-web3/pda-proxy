@@ -3,7 +3,7 @@
 A [Celestia Data Availability (DA)](https://celestia.org) proxy, enabling use of the [canonical JSON RPC](https://node-rpc-docs.celestia.org/) but intercepting and [**_verifiably_** encrypting](./doc/verifiable_encryption.md) sensitive data before submission on the public DA network, and enable decryption on retrieval.
 Non-sensitive calls are unmodified.
 
-Verifiable encryption is presently enabled via an [SP1 Zero Knowledge Proof (ZKP)](https://docs.succinct.xyz/docs/sp1/what-is-a-zkvm), with [additional proof systems planned](./doc/verifiable_encryption.md)
+Verifiable encryption is presently enabled via an [SP1 Zero Knowledge Proof (ZKP)](https://docs.succinct.xyz/docs/sp1/what-is-a-zkvm), with [additional proof systems planned](./doc/verifiable_encryption.md#future-work-and-research-directions)
 
 **Jump to a section:**
 
@@ -40,7 +40,7 @@ The PDA proxy depends on a connection to:
    - Submit and retrieve (verifiable encrypted) blob data.
 1. (Optional) [Succinct prover network](https://docs.succinct.xyz/docs/sp1/generating-proofs/prover-network) as a provider to generate Zero-Knowledge Proofs (ZKPs) of data existing on Celestia.
    _See the [ZKP program](./zkVM/sp1/program-chacha) for details on what is proven._
-Then any HTTP1 client works to send [Celestial JSON RPC](https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia) calls to the proxy:
+   Then any HTTP1 client works to send [Celestia JSON RPC](https://docs.celestia.org/how-to-guides/submit-data#submitting-data-blobs-to-celestia) calls to the proxy:
 
 ```sh
 # Proxy running on 127.0.0.1:26657
@@ -72,12 +72,13 @@ Celestia has many [API client libraries](https://docs.celestia.org/how-to-guides
 
 ### Request Flow
 
+#### Encrypt `blob.Submit`
+
 ```mermaid
 sequenceDiagram
     participant JSON RPC Client
     participant PDA Proxy
     participant Celestia Node
-    note right of JSON RPC Client: **** ENCRYPT **********************
     JSON RPC Client->>+PDA Proxy: blob.Submit(blobs, options)<br>{AUTH_TOKEN in header}
     PDA Proxy->>PDA Proxy: Job Processing...<br>{If no DB entry, start new zkVM Job}
     PDA Proxy->>-JSON RPC Client: Response{"Call back"}
@@ -87,8 +88,15 @@ sequenceDiagram
     PDA Proxy->>Celestia Node: blob.Submit(V. Encrypt. blobs, options)
     Celestia Node->>PDA Proxy: Response{Inclusion Block Height}
     PDA Proxy->>-JSON RPC Client: Response{Inclusion Block Height}
+```
 
-    note right of JSON RPC Client: **** DECRYPT **********************
+#### (Try Decrypt) `blob.[Get|GetAll]`
+
+```mermaid
+sequenceDiagram
+    participant JSON RPC Client
+    participant PDA Proxy
+    participant Celestia Node
 
     JSON RPC Client->>+PDA Proxy: blob.Get(height, namespace, commitment)
     PDA Proxy->>Celestia Node: <Passthrough>
@@ -96,8 +104,15 @@ sequenceDiagram
     PDA Proxy->>PDA Proxy: *Try* deserialize & decrypt
     PDA Proxy->>-JSON RPC Client: *Success* -> Response{...,decrypted bytes,...}
     PDA Proxy->>JSON RPC Client: *Failure* -> <Passthrough>
+```
 
-    note right of JSON RPC Client: **** TRANSPARENT PROXY *************
+#### Transparent Proxy (all other calls)
+
+```mermaid
+sequenceDiagram
+    participant JSON RPC Client
+    participant PDA Proxy
+    participant Celestia Node
 
     JSON RPC Client->>+PDA Proxy: Request{<Anything else>}<br>{AUTH_TOKEN in header}
     PDA Proxy->>Celestia Node: <Passthrough>
@@ -118,12 +133,12 @@ To build and run, see [developing instructions](#develop)
 
 ### Requirements
 
-TODO
-
 1. A machine to run with a _minimum_ of:
 
-   - L4 NVIDIA GPU
-   - GB RAM
+   - NVIDIA GPU with 20GB+ of VRAM (Tested on [L4](https://www.nvidia.com/en-us/data-center/l4/))
+     - Must support CUDA 12+
+   - 4+ CPU cores
+   - 16GB+ RAM
    - Ports accessible (by default):
      - service listening at `TODO`
      - Light client (local or remote) over `26658`
@@ -166,6 +181,8 @@ As we don't want to embed huge files, secrets, and dev only example static files
 
 1. Setup a DNS to point to your instance with email and domain.
 1. Create and update an `.env` (see [config](#configure).
+1. Select a base OS image to run on the host that includes [CUDA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html) or install it manually.
+   - See: [CUDA Container Toolkit install instructions](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) and [AWS NVIDIA docs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html) (or your cloud host's docs for GPU base OS images).
 1. Run [./scripts/setup_remote_host.sh](./scripts/setup_remote_host.sh) or otherwise see the scripts to manually configure similarly.
    1. **ONLY for development & testing!** copy the unsafe example TLS files from [./service/static](./service/static) to `app/static` on the host
       - You should use:
@@ -279,7 +296,4 @@ The images are built and published for [releases](https://github.com/celestiaorg
 
 ## Acknowledgments
 
-Based heavily on:
-
-- <https://github.com/eigerco/lumina/tree/main/rpc>
-- <https://github.com/celestiaorg/eq-service>
+Based heavily on <https://github.com/celestiaorg/eq-service>.
