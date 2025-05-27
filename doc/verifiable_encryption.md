@@ -70,17 +70,18 @@ In a world where chain data is globally replicated and indexed, **encryption at 
 ### _Trustless Data Markets_
 
 With VE, PDA, and escrow contracts you can construct protocols to build trustless exchange of data access
+See the [Stock0](https://dorahacks.io/buidl/14098) media market hackathon project for some great inspiration!
+
+Here is a [diagram inspired by them](https://docs.google.com/presentation/d/1qq1QXSBcThOjaQ2OcEyS8cwNyAHs3SnC76YrBMAYENk) of an example setup of inputs for a market:
 
 ```mermaid
 flowchart LR
-    Photo["Photo"] -- "data<br>(private)" --> zkVM_Algo["zkVM Photo tranform algo"]
-    zkVM_Algo -- "proof of transform w/ VE anchor" --> Contract["Marketplace contract"]
-    Photo -- "*VE* data" --> Celestia["Celestia"]
-    Celestia -- "header" --> Blobstream["Blobstream"]
+    Data["Data to be Sold"] --> zkVM_Algo["zkVM(tranform media)"]
+    zkVM_Algo -- "proven data transform w/ VE anchor" --> Contract["Marketplace on <dApp chain>"]
+    Data -- "VE data" --> Celestia["Celestia"]
+    Celestia -- "header" --> Blobstream["Blobstream on <dApp chain>"]
     Blobstream <-- "verify VE anchor and DA" --> Contract
 ```
-
-> See the [Stock0](https://dorahacks.io/buidl/14098) media market hackathon project [diagram inspired by](https://docs.google.com/presentation/d/1qq1QXSBcThOjaQ2OcEyS8cwNyAHs3SnC76YrBMAYENk)
 
 ### _Verifiable Private Backups_
 
@@ -105,7 +106,6 @@ The **anchor** acts as a bridge, connecting **any protocol** to a **proof** that
 
 ## Future Work and Research Directions
 
-[Future Work & Research Directions](#Future Work & Research Directions)
 While VE for PDA is still evolving, the potential is enormous.
 Current implementations have limitations, but these are rapidly being addressed by:
 
