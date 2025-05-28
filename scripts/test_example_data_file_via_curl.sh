@@ -10,5 +10,7 @@ source ../.env
   base64 -w0 "$FILE"
   echo '", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], {} ] }'
 } | curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" \
-         -X POST --data @- https://$PDA_SOCKET --verbose --insecure
+        --data @- https://$TLS_DOMAIN --verbose # remote
 
+# | curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" \
+#          # --data @- https://$PDA_SOCKET --verbose --insecure # local

@@ -13,7 +13,7 @@ name = "vkey"
 path = "src/bin/vkey.rs"
 
 [dependencies]
-clap = { version = "4.0", features = ["derive", "env"] }
+clap.workspace = true
 sp1-sdk.workspace = true
 hex.workspace = true
 sha2.workspace = true
@@ -22,8 +22,8 @@ dotenv.workspace = true
 zkvm-common = { workspace = true, features = ["std"] }
 
 [build-dependencies]
-sp1-build = "4.0"
-
+sp1-build.workspace = true
+ 
 # Greatly reduces cycle count when executing the zkVM program
 # Also reflected in sp1/build.rs
 [profile.release]
