@@ -2,7 +2,7 @@ services:
   celestia-node:
     image: ${CELESTIA_DOCKER_IMAGE}
     container_name: ${CELESTIA_NODE_NAME}
-    command: celestia ${CELESTIA_NODE_TYPE} start --core.ip ${CELESTIA_NODE_CORE_IP}
+    command: celestia ${CELESTIA_NODE_TYPE} start --core.ip ${CELESTIA_NODE_CORE_IP} --p2p.network ${CELESTIA_NETWORK}
     volumes:
       - ${CELESTIA_DATA_DIR}:/home/celestia
     expose:
@@ -15,7 +15,8 @@ services:
       - /app/.env
 
   pda-proxy:
-    image: pda-proxy
+    image: ghcr.io/celestiaorg/${DOCKER_CONTAINER_NAME}:latest
+    # image: local/pda-proxy # OPTIONAL: for local development
     # build: .  # OPTIONAL: for local development
     depends_on:
       - celestia-node
@@ -41,4 +42,3 @@ services:
 networks:
   internal:
     driver: bridge
-    internal: true

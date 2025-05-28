@@ -24,8 +24,8 @@ ssh -i "$REMOTE_IDENTITY" "$REMOTE_HOST" \
 
 # Docker compose startup, run detached so you can close the local term,
 # then immediate starts following logs.
-ssh -i "$REMOTE_IDENTITY" "$REMOTE_HOST" \
-  "cd /app && \
-  gunzip -c '${DOCKER_CONTAINER_NAME}-docker.tar.gz' | docker load && \
-  docker compose up -d && \
-  docker compose logs -f"
+# ssh -i "$REMOTE_IDENTITY" "$REMOTE_HOST" \
+#   "cd /app && \
+#   gunzip -c '${DOCKER_CONTAINER_NAME}-docker.tar.gz' | docker load && \
+#   docker compose up -d && \
+#   docker compose logs -f"
