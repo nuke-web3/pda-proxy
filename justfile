@@ -120,6 +120,14 @@ curl-blob-get:
     https://127.0.0.1:26657 \
     --insecure
 
+# Check API is responsive, required for proxy to function
+celestia-node-healthcheck:
+    curl -sf -X POST \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${CELESTIA_NODE_WRITE_TOKEN}" \
+      --data '{"jsonrpc":"2.0","id":1,"method":"header.SyncState","params":[]}' \
+      http://127.0.0.1:26658
+
 # Test blob.Submit
 curl-blob-submit:
     curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \

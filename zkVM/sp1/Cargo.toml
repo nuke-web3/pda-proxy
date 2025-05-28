@@ -23,7 +23,7 @@ zkvm-common = { workspace = true, features = ["std"] }
 
 [build-dependencies]
 sp1-build.workspace = true
- 
+
 # Greatly reduces cycle count when executing the zkVM program
 # Also reflected in sp1/build.rs
 [profile.release]

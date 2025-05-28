@@ -2,6 +2,7 @@ services:
   celestia-node:
     image: ${CELESTIA_DOCKER_IMAGE}
     container_name: ${CELESTIA_NODE_NAME}
+    user: "root"  # FIXME: permissions issues with .check and .lock files
     command: celestia ${CELESTIA_NODE_TYPE} start --core.ip ${CELESTIA_NODE_CORE_IP} --p2p.network ${CELESTIA_NETWORK}
     volumes:
       - ${CELESTIA_DATA_DIR}:/home/celestia
@@ -13,13 +14,26 @@ services:
     restart: unless-stopped
     env_file:
       - /app/.env
+    healthcheck:
+      test: >
+        bash -c '
+        curl -sf -X POST \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${CELESTIA_NODE_WRITE_TOKEN}" \
+          --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"header.SyncState\",\"params\":[]}" \
+          http://localhost:${CELESTIA_RPC_PORT} | grep -q "jsonrpc"'
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
 
   pda-proxy:
     image: ghcr.io/celestiaorg/${DOCKER_CONTAINER_NAME}:latest
     # image: local/pda-proxy # OPTIONAL: for local development
     # build: .  # OPTIONAL: for local development
     depends_on:
-      - celestia-node
+      celestia-node:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # - ./service/static:/app/static  # OPTIONAL: for local development
@@ -31,6 +45,8 @@ services:
       - TLS_CERTS_PATH=/etc/letsencrypt/live/${TLS_DOMAIN}/fullchain.pem
       - TLS_KEY_PATH=/etc/letsencrypt/live/${TLS_DOMAIN}/privkey.pem
       - RUST_LOG=pda_proxy=debug
+      # docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' celestia-light-mocha-4
+      - CELESTIA_NODE_SOCKET=172.18.0.2:26658
     env_file:
       - /app/.env
     networks:
