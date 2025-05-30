@@ -9,9 +9,8 @@ use hyper::{
     service::service_fn,
 };
 use hyper_rustls::HttpsConnectorBuilder;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
+use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use log::{debug, error, info, warn};
 use rustls::ServerConfig;
 use sha2::{Digest, Sha256};
@@ -21,10 +20,13 @@ use tokio::{
     sync::{OnceCell, mpsc},
 };
 use tokio_rustls::TlsAcceptor;
+use tower::ServiceBuilder;
+use tower::retry::RetryLayer;
 
 mod internal;
 use internal::error::*;
 use internal::job::*;
+use internal::retry::*;
 use internal::runner::*;
 use internal::util::*;
 
@@ -76,8 +78,7 @@ async fn main() -> Result<()> {
 
     info!("Listening on https://{}", service_socket);
     let https_builder = HttpsConnectorBuilder::new().with_native_roots()?;
-
-    let https_or_http_connector = if std::env::var("UNSAFE_HTTP_UPSTREAM").is_ok() {
+    let base_connector = if std::env::var("UNSAFE_HTTP_UPSTREAM").is_ok() {
         warn!("UNSAFE_HTTP_UPSTREAM — allowing HTTP for upstream Celestia connection!");
         https_builder.https_or_http().enable_http1().build()
     } else {
@@ -87,8 +88,16 @@ async fn main() -> Result<()> {
         );
         https_builder.https_only().enable_http1().build()
     };
+
+    // Allow up to 3 total attempts to *redial TLS* if we get an error
+    // We reuse TLS connections if no problems
+    let retry_connect_policy = RetryPolicy::new(3);
+    let stack = ServiceBuilder::new().layer(RetryLayer::new(retry_connect_policy));
+
+    let retrying_connector = stack.service(base_connector);
+
     let celestia_client: Client<_, BoxBody> =
-        Client::builder(TokioExecutor::new()).build(https_or_http_connector);
+        Client::builder(TokioExecutor::new()).build(retrying_connector.into_inner());
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();

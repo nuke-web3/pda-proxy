@@ -43,6 +43,7 @@ rand = { version = "0.9", default-features = false, features = ["os_rng"] }
 rustls = "0.23"
 tokio-rustls = "0.26"
 rustls-pemfile = "2.2"
+tower = { version = "0.5", features = ["retry"] }
 
 [patch.crates-io]
 sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", tag = "patch-sha2-0.10.8-sp1-4.0.0" }

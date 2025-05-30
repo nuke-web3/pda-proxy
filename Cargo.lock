@@ -4174,6 +4174,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls",
+ "tower 0.5.2",
 ]
 
 [[package]]
