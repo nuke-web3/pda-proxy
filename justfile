@@ -114,15 +114,39 @@ mocha:
 mocha-local-auth:
     celestia light auth admin --p2p.network mocha
 
-# Test blob.Get
-curl-blob-get:
-    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' \
-    https://127.0.0.1:26657 \
-    --insecure
+# Check API is responsive, required for proxy to function
+celestia-node-healthcheck:
+    curl -sf \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${CELESTIA_NODE_WRITE_TOKEN}" \
+      --data '{"jsonrpc":"2.0","id":1,"method":"header.SyncState","params":[]}' \
+      http://127.0.0.1:26658 | jq
 
-# Test blob.Submit
+# Check balance for any address. NOTE: MUST be a known good address, i.e.: celestia1377k5an3f94v6wyaceu0cf4nq6gk2jtpc46g7h
+celestia-node-balance-for ADDR:
+    curl -sf \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${CELESTIA_NODE_WRITE_TOKEN}" \
+      --data '{"jsonrpc":"2.0","id":1,"method":"state.BalanceForAddress","params":["{{ ADDR }}"]}' \
+      http://127.0.0.1:26658 | jq
+
+# Check balance for local node
+celestia-node-balance:
+    curl -sf \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${CELESTIA_NODE_WRITE_TOKEN}" \
+      --data '{"jsonrpc":"2.0","id":1,"method":"state.Balance","params":[]}' \
+      http://127.0.0.1:26658 | jq
+
+# Test blob.Get for PDA Proxy
+curl-blob-get:
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' \
+    https://127.0.0.1:26657 \
+    --insecure | jq
+
+# Test blob.Submit for PDA proxy
 curl-blob-submit:
-    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" -X POST \
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" \
          --data '{ "id": 1, "jsonrpc": "2.0", "method": "blob.Submit", "params": [ [ { "namespace": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "data": "DEADB33F", "share_version": 0, "commitment": "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=", "index": -1 } ], { } ] }' \
          https://127.0.0.1:26657 \
-         --insecure
+         --insecure | jq
