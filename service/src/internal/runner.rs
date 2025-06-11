@@ -138,6 +138,8 @@ impl PdaRunner {
                 .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
             match job_status {
                 JobStatus::LocalZkProofPending => return Ok(None),
+                JobStatus::RemoteZkProofRequesting => return Ok(None),
+                JobStatus::RemoteZkProofPending(_) => return Ok(None),
                 _ => {
                     let e = format!(
                         "0x{} - Job queue is in invalid state",
@@ -153,10 +155,19 @@ impl PdaRunner {
             "0x{} - New job sending to worker and adding to queue",
             hex::encode(&job_key)
         );
+
+        let prover_type = std::env::var("SP1_PROVER").expect("Missing SP1_PROVER env var");
+        // Match on the prover string to produce a JobStatus variant
+        let initial_status = match prover_type.as_str() {
+            "network" => JobStatus::RemoteZkProofRequesting,
+            "cuda" | "cpu" | "mock" => JobStatus::LocalZkProofPending,
+            unknown_str => panic!("SP1_PROVER is malformed: {}", unknown_str),
+        };
+
         self.queue_db
             .insert(
                 &job_key,
-                bincode::serialize(&JobStatus::LocalZkProofPending)
+                bincode::serialize(&initial_status)
                     .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?,
             )
             .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
@@ -241,7 +252,7 @@ impl PdaRunner {
                             self.finalize_job(&job_key, job_status)?;
                         }
                         Err(e) => {
-                            error!("{job:?} failed progressing ZkProofPending: {e}");
+                            error!("{job:?} failed progressing RemoteZkProofPending: {e}");
                             job_status = JobStatus::Failed(
                                 e,
                                 Some(JobStatus::RemoteZkProofPending(zk_request_id).into()),
@@ -249,7 +260,7 @@ impl PdaRunner {
                             self.finalize_job(&job_key, job_status)?;
                         }
                     }
-                    debug!("ZK request fulfilled");
+                    debug!("Remote ZK request fulfilled, result stored in DB");
                 }
                 JobStatus::LocalZkProofPending => {
                     // TODO handle non-hardcoded ZK programs
@@ -263,7 +274,10 @@ impl PdaRunner {
                             self.finalize_job(&job_key, job_status)?;
                         }
                         Err(e) => {
-                            error!("0x{} - Failed progressing job: {e}", hex::encode(&job_key));
+                            error!(
+                                "0x{} - Failed progressing LocalZkProofPending: {e}",
+                                hex::encode(&job_key)
+                            );
                             job_status = JobStatus::Failed(
                                 e, None, // TODO: should this be retry-able?
                             );
@@ -412,7 +426,6 @@ impl PdaRunner {
                     "ZKP network: {zk_client_error} occurred for job 0x{}",
                     hex::encode(job_key)
                 ));
-
                 let id = request_id
                     .as_slice()
                     .try_into()

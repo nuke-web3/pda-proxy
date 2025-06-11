@@ -3628,6 +3628,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls",
+ "tonic",
 ]
 
 [[package]]
