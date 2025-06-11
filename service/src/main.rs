@@ -14,6 +14,7 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use log::{debug, error, info, warn};
 use rustls::ServerConfig;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -404,10 +405,19 @@ fn pending_response() -> Response<BoxBody> {
 
 /// Create an internal error response in JSON-RPC 2.0 format.
 fn internal_error_response(error: String) -> Response<BoxBody> {
-    let raw_json = format!(
-        r#"{{ "id": 1, "jsonrpc": "2.0", "error": {{ "message": "Internal error: {error}" }} }}"#
-    );
-    new_response_from(&raw_json, StatusCode::INTERNAL_SERVER_ERROR)
+    let json_obj = json!({
+        "id": 1,
+        "jsonrpc": "2.0",
+        "error": {
+            "message": format!("Internal error: {}", error)
+        }
+    });
+
+    // Serialize to string
+    let body_string =
+        serde_json::to_string(&json_obj).expect("JSON serialization should never fail");
+
+    new_response_from(&body_string, StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 /// The upstream node will drop any call without a correct
