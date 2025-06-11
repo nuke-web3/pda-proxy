@@ -5,8 +5,8 @@ use log::{debug, error, info, warn};
 use sha2::Digest;
 use sled::{Transactional, Tree as SledTree};
 use sp1_sdk::{
-    EnvProver as SP1EnvProver, SP1ProofWithPublicValues, SP1Stdin,
-    network::Error as SP1NetworkError,
+    EnvProver as SP1EnvProver, NetworkProver as SP1NetworkProver, Prover, SP1ProofWithPublicValues,
+    SP1Stdin, network::Error as SP1NetworkError,
 };
 use std::sync::Arc;
 use tokio::sync::{OnceCell, mpsc};
@@ -42,7 +42,8 @@ pub struct PdaRunner {
     pub queue_db: SledTree,
     pub finished_db: SledTree,
     pub job_sender: mpsc::UnboundedSender<Option<Job>>,
-    zk_client_handle: OnceCell<Arc<SP1EnvProver>>,
+    zk_client_handle_local: OnceCell<Arc<SP1EnvProver>>,
+    zk_client_handle_remote: OnceCell<Arc<SP1NetworkProver>>,
 }
 
 impl PdaRunner {
@@ -50,7 +51,8 @@ impl PdaRunner {
     /// to correctly construct it.
     pub fn new(
         config: PdaRunnerConfig,
-        zk_client_handle: OnceCell<Arc<SP1EnvProver>>,
+        zk_client_handle_local: OnceCell<Arc<SP1EnvProver>>,
+        zk_client_handle_remote: OnceCell<Arc<SP1NetworkProver>>,
         config_db: SledTree,
         queue_db: SledTree,
         finished_db: SledTree,
@@ -58,7 +60,8 @@ impl PdaRunner {
     ) -> Self {
         PdaRunner {
             config,
-            zk_client_handle,
+            zk_client_handle_local,
+            zk_client_handle_remote,
             config_db,
             queue_db,
             finished_db,
@@ -208,10 +211,50 @@ impl PdaRunner {
                 .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
             debug!("Job worker processing with starting status: {job_status:?}");
             match job_status {
+                JobStatus::RemoteZkProofRequesting => {
+                    // TODO handle non-hardcoded ZK programs
+                    match self
+                        .zk_proof_remote(&get_program_id().await, &job, &job_key)
+                        .await
+                    {
+                        Ok(zk_job_id) => {
+                            job_status = JobStatus::RemoteZkProofPending(zk_job_id);
+                            self.send_job_with_new_status(job_key, job_status, job)?;
+                        }
+                        Err(e) => {
+                            error!("{job:?} failed to request a proof: {e}");
+                            job_status = JobStatus::Failed(
+                                e,
+                                Some(JobStatus::RemoteZkProofRequesting.into()),
+                            );
+                            self.finalize_job(&job_key, job_status)?;
+                        }
+                    };
+                    debug!("ZK proof request sent");
+                }
+                JobStatus::RemoteZkProofPending(zk_request_id) => {
+                    debug!("ZK request waiting");
+                    match self.wait_for_zk_proof(&job_key, zk_request_id).await {
+                        Ok(zk_proof) => {
+                            info!("🎉 {job:?} Finished!");
+                            job_status = JobStatus::ZkProofFinished(zk_proof);
+                            self.finalize_job(&job_key, job_status)?;
+                        }
+                        Err(e) => {
+                            error!("{job:?} failed progressing ZkProofPending: {e}");
+                            job_status = JobStatus::Failed(
+                                e,
+                                Some(JobStatus::RemoteZkProofPending(zk_request_id).into()),
+                            );
+                            self.finalize_job(&job_key, job_status)?;
+                        }
+                    }
+                    debug!("ZK request fulfilled");
+                }
                 JobStatus::LocalZkProofPending => {
                     // TODO handle non-hardcoded ZK programs
                     match self
-                        .local_zk_proof(&get_program_id().await, &job, &job_key)
+                        .zk_proof_local(&get_program_id().await, &job, &job_key)
                         .await
                     {
                         Ok(zk_proof) => {
@@ -240,10 +283,62 @@ impl PdaRunner {
     /// fortunately it's identical per ZK program, so we store this in a DB to recall it.
     /// We load it and return a pointer to a single instance of this large setup object
     /// to read from for many concurrent [Job]s.
-    pub async fn get_proof_setup(
+    pub async fn get_proof_setup_local(
         &self,
         zk_program_elf_sha2: &[u8; 32],
         zk_client_handle: Arc<SP1EnvProver>,
+    ) -> Result<Arc<SP1ProofSetup>, PdaRunnerError> {
+        debug!("Getting ZK program proof setup");
+        let setup = CHACHA_SETUP
+            .get_or_try_init(|| async {
+                // Check DB for existing pre-computed setup
+                let precomputed_proof_setup = self
+                    .config_db
+                    .get(zk_program_elf_sha2)
+                    .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
+
+                let proof_setup = match precomputed_proof_setup { Some(precomputed) => {
+                    bincode::deserialize(&precomputed)
+                        .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?
+                } _ => {
+                    info!(
+                        "No ZK proof setup in DB for SHA2_256 = 0x{} -- generation & storing in config DB",
+                        hex::encode(zk_program_elf_sha2)
+                    );
+
+                    let new_proof_setup: SP1ProofSetup = tokio::task::spawn_blocking(move || {
+                        zk_client_handle.setup(CHACHA_ELF).into()
+                    })
+                    .await
+                    .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
+
+                    self.config_db
+                        .insert(
+                        zk_program_elf_sha2,
+                        bincode::serialize(&new_proof_setup)
+                            .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?,
+                        )
+                        .map_err(|e| PdaRunnerError::InternalError(e.to_string()))?;
+
+                    new_proof_setup
+                }};
+                Ok(Arc::new(proof_setup))
+            })
+            .await?
+            .clone();
+
+        Ok(setup)
+    }
+
+    /// Given a SHA2 hash of a ZK program, get the require setup.
+    /// The setup is a very heavy task and produces a large output (~200MB),
+    /// fortunately it's identical per ZK program, so we store this in a DB to recall it.
+    /// We load it and return a pointer to a single instance of this large setup object
+    /// to read from for many concurrent [Job]s.
+    pub async fn get_proof_setup_remote(
+        &self,
+        zk_program_elf_sha2: &[u8; 32],
+        zk_client_handle: Arc<SP1NetworkProver>,
     ) -> Result<Arc<SP1ProofSetup>, PdaRunnerError> {
         debug!("Getting ZK program proof setup");
         let setup = CHACHA_SETUP
@@ -341,16 +436,16 @@ impl PdaRunner {
         }
     }
 
-    async fn local_zk_proof(
+    async fn zk_proof_local(
         &self,
         program_id: &SuccNetProgramId,
         job: &Job,
         job_key: &[u8],
     ) -> Result<SP1ProofWithPublicValues, PdaRunnerError> {
         debug!("Preparing local SP1 proving");
-        let zk_client_handle = self.get_zk_client().await;
+        let zk_client_handle = self.get_zk_client_local().await;
         let proof_setup = self
-            .get_proof_setup(program_id, zk_client_handle.clone())
+            .get_proof_setup_local(program_id, zk_client_handle.clone())
             .await?;
 
         let mut stdin = SP1Stdin::new();
@@ -386,6 +481,93 @@ impl PdaRunner {
                 PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?;
         debug!("0x{} - Proof complete", hex::encode(job_key));
+        Ok(proof)
+    }
+
+    async fn zk_proof_remote(
+        &self,
+        program_id: &SuccNetProgramId,
+        job: &Job,
+        job_key: &[u8],
+    ) -> Result<util::SuccNetJobId, PdaRunnerError> {
+        debug!("Preparing local SP1 proving");
+        let zk_client_handle = self.get_zk_client_remote().await;
+        let proof_setup = self
+            .get_proof_setup_remote(program_id, zk_client_handle.clone())
+            .await?;
+
+        let mut stdin = SP1Stdin::new();
+        // Setup the inputs:
+        // - key = 32 bytes
+        // - nonce = 12 bytes (MUST BE UNIQUE - NO REUSE!)
+        // - input_plaintext = bytes to encrypt
+
+        let key = <[u8; 32]>::from_hex(
+            std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
+        )
+        .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
+
+        stdin.write_slice(&key);
+
+        let nonce: [u8; 12] = util::random_nonce();
+        stdin.write_slice(&nonce);
+
+        // TODO: replace example bytes with service interface
+        let input_plaintext: &[u8] = job.input.data.as_slice();
+        stdin.write_slice(input_plaintext);
+
+        debug!("0x{} - Starting proof", hex::encode(job_key));
+        let request_id: util::SuccNetJobId = zk_client_handle
+            .prove(&proof_setup.pk, &stdin)
+            .groth16()
+            .skip_simulation(false)
+            .timeout(std::time::Duration::from_secs(5)) // Don't hang too long on this. If it's gonna fail, fail fast.
+            .request_async()
+            .await
+            // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
+            .map_err(|e| {
+                if let Some(down) = e.downcast_ref::<SP1NetworkError>() {
+                    return self.handle_zk_client_error(down, job_key);
+                }
+                PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
+            })?
+            .into();
+
+        debug!(
+            "0x{} - Proof submitted to prover network (Request ID)",
+            hex::encode(request_id)
+        );
+        Ok(request_id)
+    }
+
+    /// Await a proof request from Succinct's prover network
+    async fn wait_for_zk_proof(
+        &self,
+        job_key: &[u8],
+        request_id: util::SuccNetJobId,
+    ) -> Result<SP1ProofWithPublicValues, PdaRunnerError> {
+        debug!("Waiting for proof from prover network");
+        let zk_client_handle = self.get_zk_client_remote().await;
+
+        let proof = zk_client_handle
+            .wait_proof(request_id.into(), None)
+            .await
+            .map_err(|e| {
+                error!("UNHANDLED ZK client error: {e:?}");
+                let e = PdaRunnerError::ZkClientError(
+                    "UNKNOWN ZK client error. PLEASE REPORT!".to_string(),
+                );
+                match self.finalize_job(
+                    job_key,
+                    JobStatus::Failed(
+                        e.clone(),
+                        Some(JobStatus::RemoteZkProofPending(request_id).into()),
+                    ),
+                ) {
+                    Ok(_) => e,
+                    Err(internal_err) => internal_err,
+                }
+            })?;
         Ok(proof)
     }
 
@@ -437,11 +619,22 @@ impl PdaRunner {
             .map_err(|e| PdaRunnerError::InternalError(e.to_string()))
     }
 
-    pub async fn get_zk_client(&self) -> Arc<SP1EnvProver> {
-        self.zk_client_handle
+    pub async fn get_zk_client_local(&self) -> Arc<SP1EnvProver> {
+        self.zk_client_handle_local
             .get_or_init(|| async {
-                debug!("Building ZK client");
+                debug!("Building Local ZK client");
                 let client = sp1_sdk::ProverClient::from_env();
+                Arc::new(client)
+            })
+            .await
+            .clone()
+    }
+
+    pub async fn get_zk_client_remote(&self) -> Arc<SP1NetworkProver> {
+        self.zk_client_handle_remote
+            .get_or_init(|| async {
+                debug!("Building Remote ZK client");
+                let client = sp1_sdk::ProverClient::builder().network().build();
                 Arc::new(client)
             })
             .await

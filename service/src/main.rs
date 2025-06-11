@@ -95,6 +95,7 @@ async fn main() -> Result<()> {
     let pda_runner = Arc::new(PdaRunner::new(
         PdaRunnerConfig {},
         OnceCell::new(),
+        OnceCell::new(),
         config_db.clone(),
         queue_db.clone(),
         finished_db.clone(),
@@ -105,9 +106,15 @@ async fn main() -> Result<()> {
         let runner = pda_runner.clone();
         async move {
             let program_id = get_program_id().await;
-            let zk_client = runner.clone().get_zk_client().await;
-            debug!("ZK client prepared, acquiring setup");
-            let _ = runner.get_proof_setup(&program_id, zk_client).await;
+            let zk_client_local = runner.clone().get_zk_client_local().await;
+            let zk_client_remote = runner.clone().get_zk_client_remote().await;
+            debug!("ZK client prepared, acquiring setups (local and remote)");
+            let _ = runner
+                .get_proof_setup_local(&program_id, zk_client_local)
+                .await;
+            let _ = runner
+                .get_proof_setup_remote(&program_id, zk_client_remote)
+                .await;
             info!("ZK client ready!");
         }
         // TODO: crash whole program if this fails
