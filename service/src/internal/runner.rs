@@ -161,7 +161,11 @@ impl PdaRunner {
         let initial_status = match prover_type.as_str() {
             "network" => JobStatus::RemoteZkProofRequesting,
             "cuda" | "cpu" | "mock" => JobStatus::LocalZkProofPending,
-            unknown_str => panic!("SP1_PROVER is malformed: {}", unknown_str),
+            unknown_str => {
+                let e = format!("SP1_PROVER is unkown: {}", unknown_str);
+                error!("{e}");
+                return Err(PdaRunnerError::InternalError(e));
+            }
         };
 
         self.queue_db

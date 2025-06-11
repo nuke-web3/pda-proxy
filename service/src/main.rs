@@ -399,7 +399,7 @@ async fn outbound_handler(
 
 /// Job is in queue, we are waiting on it to finish
 fn pending_response() -> Response<BoxBody> {
-    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "[pda-proxy] Verifiable encryption processing... Call back for result" }"#;
     new_response_from(raw_json, StatusCode::ACCEPTED)
 }
 
@@ -409,7 +409,7 @@ fn internal_error_response(error: String) -> Response<BoxBody> {
         "id": 1,
         "jsonrpc": "2.0",
         "error": {
-            "message": format!("Internal error: {}", error)
+            "message": format!("[pda-proxy] internal error: {}", error)
         }
     });
 
