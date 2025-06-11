@@ -14,6 +14,7 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use log::{debug, error, info, warn};
 use rustls::ServerConfig;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -95,6 +96,7 @@ async fn main() -> Result<()> {
     let pda_runner = Arc::new(PdaRunner::new(
         PdaRunnerConfig {},
         OnceCell::new(),
+        OnceCell::new(),
         config_db.clone(),
         queue_db.clone(),
         finished_db.clone(),
@@ -105,9 +107,15 @@ async fn main() -> Result<()> {
         let runner = pda_runner.clone();
         async move {
             let program_id = get_program_id().await;
-            let zk_client = runner.clone().get_zk_client().await;
-            debug!("ZK client prepared, acquiring setup");
-            let _ = runner.get_proof_setup(&program_id, zk_client).await;
+            let zk_client_local = runner.clone().get_zk_client_local().await;
+            let zk_client_remote = runner.clone().get_zk_client_remote().await;
+            debug!("ZK client prepared, acquiring setups (local and remote)");
+            let _ = runner
+                .get_proof_setup_local(&program_id, zk_client_local)
+                .await;
+            let _ = runner
+                .get_proof_setup_remote(&program_id, zk_client_remote)
+                .await;
             info!("ZK client ready!");
         }
         // TODO: crash whole program if this fails
@@ -391,16 +399,25 @@ async fn outbound_handler(
 
 /// Job is in queue, we are waiting on it to finish
 fn pending_response() -> Response<BoxBody> {
-    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "Verifiable encryption processing... Call back for result" }"#;
+    let raw_json = r#"{ "id": 1, "jsonrpc": "2.0", "status": "[pda-proxy] Verifiable encryption processing... Call back for result" }"#;
     new_response_from(raw_json, StatusCode::ACCEPTED)
 }
 
 /// Create an internal error response in JSON-RPC 2.0 format.
 fn internal_error_response(error: String) -> Response<BoxBody> {
-    let raw_json = format!(
-        r#"{{ "id": 1, "jsonrpc": "2.0", "error": {{ "message": "Internal error: {error}" }} }}"#
-    );
-    new_response_from(&raw_json, StatusCode::INTERNAL_SERVER_ERROR)
+    let json_obj = json!({
+        "id": 1,
+        "jsonrpc": "2.0",
+        "error": {
+            "message": format!("[pda-proxy] internal error: {}", error)
+        }
+    });
+
+    // Serialize to string
+    let body_string =
+        serde_json::to_string(&json_obj).expect("JSON serialization should never fail");
+
+    new_response_from(&body_string, StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 /// The upstream node will drop any call without a correct

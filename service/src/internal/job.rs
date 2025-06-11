@@ -49,7 +49,9 @@ impl fmt::Debug for Anchor {
 pub enum JobStatus {
     /// A ZK prover job had been started, awaiting completion
     LocalZkProofPending,
-    /// A ZK prover job had been requested, awaiting response
+    /// A ZK prover job is being requested, gathering prover network ID
+    RemoteZkProofRequesting,
+    /// A ZK prover job has been requested, awaiting response
     RemoteZkProofPending(SuccNetJobId),
     /// A ZK proof is ready, and the [Job] is complete
     // For now we'll use the SP1ProofWithPublicValues as the proof
@@ -66,7 +68,8 @@ impl std::fmt::Debug for JobStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             JobStatus::LocalZkProofPending => write!(f, "LocalZkProofPending"),
-            JobStatus::RemoteZkProofPending(_) => write!(f, "ZkProofPending"),
+            JobStatus::RemoteZkProofRequesting => write!(f, "RemoteZkProofRequesting"),
+            JobStatus::RemoteZkProofPending(_) => write!(f, "RemoteZkProofPending"),
             JobStatus::ZkProofFinished(_) => write!(f, "ZkProofFinished"),
             JobStatus::Failed(_, _) => write!(f, "Failed"),
         }
