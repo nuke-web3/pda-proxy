@@ -288,7 +288,6 @@ pub async fn inbound_handler(
 
                         let mut encrypted_blobs = Vec::with_capacity(blobs.len());
 
-                        // TODO: consider only allowing one blob and one job on the queue
                         for blob in blobs {
                             let pda_runner = pda_runner.clone();
                             let data = blob.data.clone();
@@ -318,9 +317,12 @@ pub async fn inbound_handler(
 
                                 encrypted_blobs.push(encrypted_blob);
                             } else {
-                                return Ok(None);
+                                return Ok(None); // Bail out if any blob can't be encrypted
                             }
                         }
+
+                        // Overwrite the original blob array in the params with encrypted blobs
+                        *blobs_value = serde_json::to_value(encrypted_blobs)?;
                     }
                 } else {
                     debug!("Forwarding `blob.Submit` error: missing params");
