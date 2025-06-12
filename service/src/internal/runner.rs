@@ -554,7 +554,7 @@ impl PdaRunner {
             .strategy(strategy)
             .groth16()
             .skip_simulation(false)
-            .timeout(std::time::Duration::from_secs(5)) // Don't hang too long on this. If it's gonna fail, fail fast.
+            // .timeout(std::time::Duration::from_secs(60))
             .request_async()
             .await
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
