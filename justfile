@@ -141,9 +141,11 @@ celestia-node-balance:
 
 # Test blob.Get for PDA Proxy
 curl-blob-get:
-    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 42, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAMJ/xGlNMdE=", "aHlbp+J9yub6hw/uhK6dP8hBLR2mFy78XNRRdLf2794=" ] }' \
+    curl -H "Content-Type: application/json" -H "Authorization: Bearer $CELESTIA_NODE_WRITE_TOKEN" --data '{"id": 1,"jsonrpc": "2.0", "method": "blob.Get", "params": [ 6608695, "AAAAAAAAAAAAAAAAAAAAAAAAAAvBBshVQcTi92w=", "nPDyRXefks+koMJhy7LzN9269+Oz4PjcsAPk64ke85E=" ] }' \
     https://127.0.0.1:26657 \
     --insecure | jq
+
+# https://mocha.celenium.io/tx/436f223bfa8c4adf1e1b79dde43a84918f3a50809583c57c33c1c079568b47cb?tab=messages
 
 # Test blob.Submit for PDA proxy
 curl-blob-submit:
