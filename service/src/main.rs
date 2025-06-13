@@ -284,7 +284,7 @@ pub async fn inbound_handler(
                             .get_mut(0)
                             .ok_or_else(|| anyhow::anyhow!("Expected first 'params' entry"))?;
 
-                        let blobs: Vec<Blob> = serde_json::from_value(blobs_value.clone())?;
+                        let blobs: Vec<Blob> = serde_json::from_value(std::mem::take(blobs_value))?;
 
                         let mut encrypted_blobs = Vec::with_capacity(blobs.len());
 
