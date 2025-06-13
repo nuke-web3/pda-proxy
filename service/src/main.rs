@@ -370,20 +370,41 @@ async fn outbound_handler(
         return Ok(bad_auth_response());
     }
 
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
-    // (Optional) handle blob.Get/All for decryption etc.
+    let mut body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
     match request_method.as_str() {
         "blob.Get" => {
-            if let Some(result_raw) = body_json.get("result") {
+            if let Some(result_raw) = body_json.get_mut("result") {
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
-                debug!("{blob:?}");
+                debug!("Intercepted blob.Get result: {:?}", blob);
+
+                if let Some(decrypted_data) = verify_and_decrypt(&blob) {
+                    result_raw["data"] = serde_json::to_value(decrypted_data)?;
+                } else {
+                    let null_body = Full::new(Bytes::from("null"))
+                        .map_err(|err: std::convert::Infallible| match err {})
+                        .boxed();
+                    return Ok(Response::from_parts(parts, null_body));
+                }
             }
         }
         "blob.GetAll" => {
-            if let Some(result_raw) = body_json.get("result") {
-                let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
-                for blob in blobs {
-                    debug!("{blob:?}");
+            if let Some(result_raw) = body_json.get_mut("result") {
+                let blobs_array = result_raw
+                    .as_array_mut()
+                    .ok_or_else(|| anyhow::anyhow!("Expected 'result' to be an array of blobs"))?;
+
+                for blob_value in blobs_array.iter_mut() {
+                    let blob: Blob = serde_json::from_value(blob_value.clone())?;
+
+                    if let Some(decrypted_data) = verify_and_decrypt(&blob) {
+                        blob_value["data"] = serde_json::to_value(decrypted_data)?;
+                    } else {
+                        let null_body = Full::new(Bytes::from("null"))
+                            .map_err(|err: std::convert::Infallible| match err {})
+                            .boxed();
+                        return Ok(Response::from_parts(parts, null_body));
+                    }
                 }
             }
         }
@@ -392,6 +413,7 @@ async fn outbound_handler(
 
     let json = serde_json::to_string(&body_json)?;
     parts.headers.remove("content-length");
+
     let new_body = Full::new(Bytes::from(json))
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
@@ -439,4 +461,9 @@ fn new_response_from(raw_json: &str, status: StatusCode) -> Response<BoxBody> {
     let mut response = Response::new(BoxBody::new(body));
     *response.status_mut() = status;
     response
+}
+
+/// TODO: Mock decryption placeholder. Replace with real logic.
+fn verify_and_decrypt(_blob: &Blob) -> Option<Vec<u8>> {
+    todo!("verify and decrypt blob")
 }
