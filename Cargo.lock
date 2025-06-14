@@ -3629,6 +3629,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tonic",
+ "zkvm-common",
 ]
 
 [[package]]
