@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+zkvm-common = { workspace = true, features = ["std"] }
+
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
