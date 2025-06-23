@@ -26,3 +26,8 @@ rustls.workspace = true
 tokio-rustls.workspace = true
 rustls-pemfile.workspace = true
 hyper-rustls.workspace = true
+
+[features]
+default = ["reproducible-elf"]
+
+reproducible-elf = []

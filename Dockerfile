@@ -49,8 +49,9 @@ RUN --mount=type=cache,id=target_cache,target=/app/target \
 COPY . .
 
 # Build SP1 ELF to be proven (with optimizations)
+# TODO: need to use `cargo prove --docker` for repoducible builds?
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" /root/.sp1/bin/cargo-prove prove build --docker -p chacha-program
+  RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" /root/.sp1/bin/cargo-prove prove build -p chacha-program
 # Build the final binary
 RUN --mount=type=cache,id=target_cache,target=/app/target \
   cargo build --release && \

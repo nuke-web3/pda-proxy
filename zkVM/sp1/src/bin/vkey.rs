@@ -2,8 +2,14 @@ use sp1_sdk::{HashableKey, Prover, ProverClient};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 /// For reproducible builds, you need `cargo prove --docker`
+#[cfg(feature = "reproducible-elf")]
 pub const CHACHA_ELF: &[u8] = include_bytes!(
-    "../../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program" // "../../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+    "../../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
+
+#[cfg(not(feature = "reproducible-elf"))]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
 );
 
 fn main() {

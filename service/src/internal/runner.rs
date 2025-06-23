@@ -13,9 +13,16 @@ use tokio::sync::{OnceCell, mpsc};
 
 /// Hardcoded ELF binary for the crate `program-keccak-inclusion`
 /// For reproducible builds, you need `cargo prove --docker`
+#[cfg(feature = "reproducible-elf")]
 pub const CHACHA_ELF: &[u8] = include_bytes!(
-    "../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program" // "../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+    "../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program"
 );
+
+#[cfg(not(feature = "reproducible-elf"))]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
+
 /// Hardcoded ID for the crate `program-keccak-inclusion`
 static CHACHA_ID: OnceCell<SuccNetProgramId> = OnceCell::const_new();
 

@@ -50,7 +50,7 @@ run-debug *FLAGS: _pre-build _pre-run
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
 # Build docker image & tag
-docker-build: _pre-build
+docker-build:
     DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
 
 # Save docker image to a tar.gz

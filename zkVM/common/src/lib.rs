@@ -1,5 +1,14 @@
 // Include the binary input file
-pub const INPUT_BYTES: &[u8] = include_bytes!("../../static/proof_input_example.bin");
+/// For reproducible builds, you need `cargo prove --docker`
+#[cfg(feature = "reproducible-elf")]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
+
+#[cfg(not(feature = "reproducible-elf"))]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
