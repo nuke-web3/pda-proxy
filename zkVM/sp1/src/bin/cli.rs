@@ -1,12 +1,15 @@
 use clap::Parser;
 use hex::FromHex;
 use sha2::{Digest, Sha256};
-use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
+use sp1_sdk::{ProverClient, SP1Stdin};
 
 use zkvm_common::{KEY_LEN, NONCE_LEN, chacha, std_only::ZkvmOutput};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const CHACHA_ELF: &[u8] = include_elf!("chacha-program");
+/// For reproducible builds, you need `cargo prove --docker`
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program" // "../../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
 
 /// The arguments for the command.
 #[derive(Parser, Debug)]

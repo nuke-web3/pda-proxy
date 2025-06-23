@@ -30,7 +30,8 @@ initial-config-installs:
     @just sp1 initial-config-installs
 
 _pre-build:
-    @just sp1 build-elf
+    # ALWAYS build with docker
+    @just sp1 build-elf-reproducible
 
 _pre-run:
     echo "just pre-run TODO"
@@ -49,8 +50,8 @@ run-debug *FLAGS: _pre-build _pre-run
     RUST_LOG=pda_proxy=debug cargo r -- {{ FLAGS }}
 
 # Build docker image & tag
-docker-build:
-    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
+docker-build: _pre-build
+    DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
 
 # Save docker image to a tar.gz
 docker-save:
