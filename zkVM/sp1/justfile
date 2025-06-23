@@ -43,7 +43,7 @@ build-elf:
         echo -e "Can't find ELF at \`$ZK_PROGRAM_ELF_PATH\`.\nAttempting to build it..."; \
         RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" cargo prove build -p chacha-program; \
     else \
-        echo "✅ ELF Exists, skipping SP1 build"; \
+        echo "✅ RELEASE - ELF Exists, skipping SP1 build"; \
     fi
 
 
@@ -60,7 +60,7 @@ build-elf-reproducible:
         echo -r "\n******\nNOTE: the first run will download an sp1 docker image ~5GB\ncheck network usage if you are not seeing any progress on this step...\n"; \
         RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" cargo prove build --docker -p chacha-program; \
     else \
-        echo "✅ ELF Exists, skipping SP1 build"; \
+        echo "✅ REPRODUCIBLE - ELF Exists, skipping SP1 build"; \
     fi
 
 
