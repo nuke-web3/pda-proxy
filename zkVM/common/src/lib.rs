@@ -18,7 +18,7 @@ pub const HASH_LEN: usize = 32;
 pub const NONCE_LEN: usize = 12;
 pub const HEADER_LEN: usize = HASH_LEN + NONCE_LEN + HASH_LEN;
 
-/// Encrypt a buffer in-place using [ChaCha20](https://en.wikipedia.org/wiki/Salsa20#ChaCha_variant).
+/// Encrypt or Decrypt a buffer in-place using [ChaCha20](https://en.wikipedia.org/wiki/Salsa20#ChaCha_variant).
 ///
 /// ## Important Notice
 ///
@@ -32,7 +32,6 @@ pub fn chacha(key: &[u8; KEY_LEN], nonce: &[u8; NONCE_LEN], buffer: &mut [u8]) {
     cipher.apply_keystream(buffer);
 }
 
-// Only compile this when the standard library is available
 #[cfg(feature = "std")]
 pub mod std_only {
     use super::*;
@@ -93,14 +92,14 @@ pub mod std_only {
         }
     }
 
-    // Helper to get a OsRng nonce of correct length
+    /// Helper to get a OsRng nonce of correct length
     pub fn random_nonce() -> [u8; NONCE_LEN] {
         let mut nonce = [0u8; NONCE_LEN];
         OsRng.try_fill_bytes(&mut nonce).expect("Rng->buffer");
         nonce
     }
 
-    // Helper to format bytes as hex for pretty printing
+    /// Helper to format bytes as hex for pretty printing
     pub fn bytes_to_hex(bytes: &[u8]) -> String {
         let digest_hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
         digest_hex

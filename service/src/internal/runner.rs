@@ -6,7 +6,8 @@ use sha2::Digest;
 use sled::{Transactional, Tree as SledTree};
 use sp1_sdk::{
     EnvProver as SP1EnvProver, NetworkProver as SP1NetworkProver, Prover, SP1ProofWithPublicValues,
-    SP1Stdin, network::Error as SP1NetworkError,
+    SP1Stdin,
+    network::{Error as SP1NetworkError, FulfillmentStrategy},
 };
 use std::sync::Arc;
 use tokio::sync::{OnceCell, mpsc};
@@ -521,6 +522,12 @@ impl PdaRunner {
             .get_proof_setup_remote(program_id, zk_client_handle.clone())
             .await?;
 
+        let fs_string = std::env::var("SP1_FULFILLMENT_STRATEGY")
+            .expect("Missing SP1_FULFILLMENT_STRATEGY env var");
+        let strategy = FulfillmentStrategy::from_str_name(fs_string.as_str()).ok_or(
+            PdaRunnerError::InternalError("SP1_FULFILLMENT_STRATEGY env var malformed".to_string()),
+        )?;
+
         let mut stdin = SP1Stdin::new();
         // Setup the inputs:
         // - key = 32 bytes
@@ -544,9 +551,10 @@ impl PdaRunner {
         debug!("0x{} - Starting proof", hex::encode(job_key));
         let request_id: util::SuccNetJobId = zk_client_handle
             .prove(&proof_setup.pk, &stdin)
+            .strategy(strategy)
             .groth16()
             .skip_simulation(false)
-            .timeout(std::time::Duration::from_secs(5)) // Don't hang too long on this. If it's gonna fail, fail fast.
+            // .timeout(std::time::Duration::from_secs(60))
             .request_async()
             .await
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...

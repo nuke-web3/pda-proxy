@@ -16,6 +16,7 @@ use log::{debug, error, info, warn};
 use rustls::ServerConfig;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use sp1_sdk::SP1ProofWithPublicValues;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
     net::TcpListener,
@@ -28,6 +29,8 @@ use internal::error::*;
 use internal::job::*;
 use internal::runner::*;
 use internal::util::*;
+
+use zkvm_common::{chacha, std_only::ZkvmOutput};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type BoxBody = http_body_util::combinators::BoxBody<Bytes, GenericError>;
@@ -198,40 +201,47 @@ async fn main() -> Result<()> {
                             }
 
                             let mut request_method: String = Default::default();
-                            let maybe_wrapped_req =
-                                match inbound_handler(plaintext_req, &mut request_method, runner)
-                                    .await
-                                {
-                                    Ok(req) => req,
-                                    Err(e) => return Ok(internal_error_response(e.to_string())),
-                                };
+                            let maybe_wrapped_req = match inbound_handler(
+                                plaintext_req,
+                                &mut request_method,
+                                runner.clone(),
+                            )
+                            .await
+                            {
+                                Ok(req) => req,
+                                Err(e) => return Ok(internal_error_response(e.to_string())),
+                            };
 
                             match maybe_wrapped_req {
                                 Some(wrapped_req) => {
-                                    debug!(
-                                        "Forwarding (maybe modified) `{}` --> DA: {:?}",
-                                        request_method, wrapped_req
-                                    );
+                                    debug!("Forwarding (maybe modified) --> DA",);
+                                    // debug!(
+                                    //     "Forwarding (maybe modified) `{}` --> DA: {:?}",
+                                    //     request_method, wrapped_req
+                                    // );
                                     let returned = match celestia_client.request(wrapped_req).await
                                     {
-                                        Ok(resp) => {
-                                            outbound_handler(resp, request_method.to_owned())
-                                                .await
-                                                .unwrap_or_else(|e| {
-                                                    internal_error_response(format!(
-                                                        "Outbound Handler: {}",
-                                                        e
-                                                    ))
-                                                })
-                                        }
+                                        Ok(resp) => outbound_handler(
+                                            resp,
+                                            request_method.to_owned(),
+                                            runner,
+                                        )
+                                        .await
+                                        .unwrap_or_else(|e| {
+                                            internal_error_response(format!(
+                                                "Outbound Handler: {}",
+                                                e
+                                            ))
+                                        }),
                                         Err(e) => {
                                             internal_error_response(format!("DA Client: {}", e))
                                         }
                                     };
-                                    debug!(
-                                        "Responding (maybe modified) `{}` <-- DA: {:?}",
-                                        request_method, returned
-                                    );
+                                    debug!("Responding (maybe modified)  <-- DA",);
+                                    // debug!(
+                                    //     "Responding (maybe modified) `{}` <-- DA: {:?}",
+                                    //     request_method, returned
+                                    // );
                                     anyhow::Ok(returned)
                                 }
                                 None => Ok(pending_response()),
@@ -284,11 +294,10 @@ pub async fn inbound_handler(
                             .get_mut(0)
                             .ok_or_else(|| anyhow::anyhow!("Expected first 'params' entry"))?;
 
-                        let blobs: Vec<Blob> = serde_json::from_value(blobs_value.clone())?;
+                        let blobs: Vec<Blob> = serde_json::from_value(std::mem::take(blobs_value))?;
 
                         let mut encrypted_blobs = Vec::with_capacity(blobs.len());
 
-                        // TODO: consider only allowing one blob and one job on the queue
                         for blob in blobs {
                             let pda_runner = pda_runner.clone();
                             let data = blob.data.clone();
@@ -304,10 +313,11 @@ pub async fn inbound_handler(
                             if let Some(proof_with_values) =
                                 pda_runner.get_verifiable_encryption(job).await?
                             {
-                                debug!(
-                                    "Replacing blob.data with <Sp1ProofWithPublicValues>.proof = {:?}",
-                                    proof_with_values.proof
-                                );
+                                debug!("Replacing blob.data with <Sp1ProofWithPublicValues>.proof");
+                                // debug!(
+                                //     "Replacing blob.data with <Sp1ProofWithPublicValues>.proof = {:?}",
+                                //     proof_with_values.proof
+                                // );
 
                                 let encrypted_data = bincode::serialize(&proof_with_values)?;
                                 let encrypted_blob = Blob::new(
@@ -318,9 +328,12 @@ pub async fn inbound_handler(
 
                                 encrypted_blobs.push(encrypted_blob);
                             } else {
-                                return Ok(None);
+                                return Ok(None); // Bail out if any blob can't be encrypted
                             }
                         }
+
+                        // Overwrite the original blob array in the params with encrypted blobs
+                        *blobs_value = serde_json::to_value(encrypted_blobs)?;
                     }
                 } else {
                     debug!("Forwarding `blob.Submit` error: missing params");
@@ -355,46 +368,91 @@ pub async fn inbound_handler(
 async fn outbound_handler(
     resp: Response<IncomingBody>,
     request_method: String,
+    pda_runner: Arc<PdaRunner>,
 ) -> Result<Response<BoxBody>> {
     let (mut parts, body_stream) = resp.into_parts();
     let mut body_buf = body_stream.collect().await?.aggregate();
     let body_bytes = body_buf.copy_to_bytes(body_buf.remaining());
 
-    debug!("Raw upstream response: {:?}", body_bytes);
-
     let status = parts.status;
-
     if status == StatusCode::UNAUTHORIZED {
         return Ok(bad_auth_response());
     }
 
-    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
-    // (Optional) handle blob.Get/All for decryption etc.
-    match request_method.as_str() {
-        "blob.Get" => {
-            if let Some(result_raw) = body_json.get("result") {
+    let mut body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
+    let try_mutate_response = async {
+        let result_raw = body_json
+            .get_mut("result")
+            .ok_or_else(|| anyhow::anyhow!("Missing 'result' field"))?;
+
+        let key = <[u8; 32]>::from_hex(
+            std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY env var"),
+        )
+        .expect("ENCRYPTION_KEY must be 32 bytes, hex encoded (ex: `1234...abcd`)");
+
+        match request_method.as_str() {
+            "blob.Get" => {
                 let blob: Blob = serde_json::from_value(result_raw.clone())?;
-                debug!("{blob:?}");
+                let plaintext_only_blob =
+                    verify_decrypt_blob(blob, key, pda_runner.clone()).await?;
+                *result_raw = serde_json::to_value(plaintext_only_blob)?;
             }
-        }
-        "blob.GetAll" => {
-            if let Some(result_raw) = body_json.get("result") {
-                let blobs: Vec<Blob> = serde_json::from_value(result_raw.clone())?;
-                for blob in blobs {
-                    debug!("{blob:?}");
+
+            "blob.GetAll" => {
+                let original_array = result_raw
+                    .as_array()
+                    .ok_or_else(|| anyhow::anyhow!("Expected 'result' to be an array"))?
+                    .clone();
+
+                let mut plaintext_blobs = Vec::with_capacity(original_array.len());
+                for blob_val in original_array {
+                    let blob: Blob = serde_json::from_value(blob_val)?;
+                    let plaintext_only_blob =
+                        verify_decrypt_blob(blob, key, pda_runner.clone()).await?;
+                    plaintext_blobs.push(serde_json::to_value(plaintext_only_blob)?);
                 }
+
+                *result_raw = serde_json::Value::Array(plaintext_blobs);
             }
+
+            _ => {}
         }
-        _ => {}
+
+        Ok::<_, anyhow::Error>(())
+    }
+    .await;
+
+    if let Err(err) = try_mutate_response {
+        warn!("Failed to decrypt response: {:?}", err);
+        let orig_body = Full::new(body_bytes)
+            .map_err(|err: std::convert::Infallible| match err {})
+            .boxed();
+        return Ok(Response::from_parts(parts, orig_body));
     }
 
     let json = serde_json::to_string(&body_json)?;
     parts.headers.remove("content-length");
+
     let new_body = Full::new(Bytes::from(json))
         .map_err(|err: std::convert::Infallible| match err {})
         .boxed();
 
     Ok(Response::from_parts(parts, new_body))
+}
+
+async fn verify_decrypt_blob(
+    blob: Blob,
+    key: [u8; 32],
+    pda_runner: Arc<PdaRunner>,
+) -> Result<Blob, anyhow::Error> {
+    let proof: SP1ProofWithPublicValues = bincode::deserialize(&blob.data)?;
+    let output = extract_verified_proof_output(&proof, pda_runner).await?;
+    let mut buffer = output.ciphertext.to_owned();
+    chacha(&key, &output.nonce, &mut buffer);
+    let mut decrypted_plaintext_blob = blob.clone();
+    decrypted_plaintext_blob.data = buffer.to_vec();
+    Ok(decrypted_plaintext_blob)
 }
 
 /// Job is in queue, we are waiting on it to finish
@@ -437,4 +495,19 @@ fn new_response_from(raw_json: &str, status: StatusCode) -> Response<BoxBody> {
     let mut response = Response::new(BoxBody::new(body));
     *response.status_mut() = status;
     response
+}
+
+/// Verify a proof before returning it's attested output
+async fn extract_verified_proof_output<'a>(
+    proof: &'a SP1ProofWithPublicValues,
+    runner: Arc<PdaRunner>,
+) -> Result<ZkvmOutput<'a>> {
+    let zk_client_local = runner.get_zk_client_local().await;
+    let vk = &runner
+        .get_proof_setup_local(&get_program_id().await, zk_client_local.clone())
+        .await?
+        .vk;
+    zk_client_local.verify(proof, vk)?;
+
+    ZkvmOutput::from_bytes(proof.public_values.as_slice()).map_err(anyhow::Error::msg)
 }
