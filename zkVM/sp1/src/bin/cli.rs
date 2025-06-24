@@ -1,12 +1,21 @@
 use clap::Parser;
 use hex::FromHex;
 use sha2::{Digest, Sha256};
-use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
+use sp1_sdk::{ProverClient, SP1Stdin};
 
 use zkvm_common::{KEY_LEN, NONCE_LEN, chacha, std_only::ZkvmOutput};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const CHACHA_ELF: &[u8] = include_elf!("chacha-program");
+/// For reproducible builds, you need `cargo prove --docker`
+#[cfg(feature = "reproducible-elf")]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../../target/elf-compilation/docker/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
+
+#[cfg(not(feature = "reproducible-elf"))]
+pub const CHACHA_ELF: &[u8] = include_bytes!(
+    "../../../../target/elf-compilation/riscv32im-succinct-zkvm-elf/release/chacha-program"
+);
 
 /// The arguments for the command.
 #[derive(Parser, Debug)]
@@ -56,8 +65,8 @@ fn main() {
     stdin.write_slice(&input_nonce);
 
     // TODO: replace example bytes with service interface
-    let input_plaintext: &[u8] = zkvm_common::INPUT_BYTES;
-    stdin.write_slice(input_plaintext);
+    const INPUT_BYTES: &[u8] = include_bytes!("../../../static/proof_input_example.bin");
+    stdin.write_slice(INPUT_BYTES);
 
     let client = ProverClient::from_env();
     if args.execute {
@@ -73,7 +82,7 @@ fn main() {
             ZkvmOutput::from_bytes(output_buffer.as_slice()).expect("Failed to parse header");
 
         // Check against the input
-        let input_plaintext_digest = Sha256::digest(input_plaintext);
+        let input_plaintext_digest = Sha256::digest(INPUT_BYTES);
         println!(
             "Input -> plaintext hash: 0x{}",
             zkvm_common::std_only::bytes_to_hex(&input_plaintext_digest)
@@ -86,7 +95,7 @@ fn main() {
         let mut output_plaintext = output.ciphertext.to_owned();
         chacha(&input_key, &output.nonce, &mut output_plaintext);
 
-        assert_eq!(output_plaintext, input_plaintext);
+        assert_eq!(output_plaintext, INPUT_BYTES);
         println!("Decryption of zkVM ciphertext matches input!");
         let input_key_hash = Sha256::digest(input_key);
         assert_eq!(input_key_hash.as_slice(), output.privkey_hash);

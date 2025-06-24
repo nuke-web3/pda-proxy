@@ -22,11 +22,10 @@ sp1-zkvm = "5.0"
 sp1-sdk = "5.0"
 sp1-build = "5.0"
 chacha20 = "0.9"
-jsonrpsee = { version = "0.24", features = ["macros", "server", "http-client"] }
+jsonrpsee = { version = "0.25", features = ["macros", "server", "http-client"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
-tonic = { version = "0.12", default-features = false }
 celestia-types = "0.11"
 dotenv = "0.15"
 hyper-rustls = "0.27.6"
@@ -48,3 +47,6 @@ rustls-pemfile = "2.2"
 [patch.crates-io]
 # TODO: update to 5.0?
 sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
+
+[workspace.features]
+reproducible-elf = ["service/reproducible-elf"]

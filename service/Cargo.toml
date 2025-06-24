@@ -10,7 +10,6 @@ serde_json.workspace = true
 celestia-types.workspace = true
 jsonrpsee.workspace = true
 tokio.workspace = true
-tonic.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio"] }
 http-body-util.workspace = true
@@ -27,3 +26,8 @@ rustls.workspace = true
 tokio-rustls.workspace = true
 rustls-pemfile.workspace = true
 hyper-rustls.workspace = true
+
+[features]
+default = ["reproducible-elf"]
+
+reproducible-elf = []

@@ -30,7 +30,8 @@ initial-config-installs:
     @just sp1 initial-config-installs
 
 _pre-build:
-    @just sp1 build-elf
+    # ALWAYS build with docker
+    @just sp1 build-elf-reproducible
 
 _pre-run:
     echo "just pre-run TODO"
@@ -50,7 +51,7 @@ run-debug *FLAGS: _pre-build _pre-run
 
 # Build docker image & tag
 docker-build:
-    docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
+    DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
 
 # Save docker image to a tar.gz
 docker-save:

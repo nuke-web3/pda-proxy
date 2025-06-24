@@ -1,12 +1,12 @@
 #  Base with Rust, Go, CUDA, SP1, and cargo-chef
-FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS base-dev
+FROM nvidia/cuda:12.9.1-devel-ubuntu24.04 AS base-dev
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
   apt-get install --no-install-recommends -y \
   clang libclang-dev docker.io curl tar build-essential pkg-config git ca-certificates gnupg2 \
   && rm -rf /var/lib/apt/lists/*
  
-ENV GO_VERSION=1.22.0
+ENV GO_VERSION=1.24.4
 ENV GO_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
 RUN curl -L --proto '=https' --tlsv1.2 -sSf ${GO_URL} -o go.tar.gz && \
     mkdir -p /opt/go && \
@@ -49,17 +49,18 @@ RUN --mount=type=cache,id=target_cache,target=/app/target \
 COPY . .
 
 # Build SP1 ELF to be proven (with optimizations)
+# TODO: need to use `cargo prove --docker` for repoducible builds?
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  /root/.sp1/bin/cargo-prove prove build -p chacha-program
-
+  RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" /root/.sp1/bin/cargo-prove prove build -p chacha-program
 # Build the final binary
+# NOTE: default feature is to use --docker ELF
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  cargo build --release && \
+  cargo build --release --no-default-features && \
   strip /app/target/release/pda-proxy && \
   cp target/release/pda-proxy /app/pda-proxy # pop out of cache
 
 ####################################################################################################
-FROM nvidia/cuda:12.8.1-base-ubuntu24.04 AS runtime
+FROM nvidia/cuda:12.9.1-base-ubuntu24.04 AS runtime
 
 # SP1 CUDA support needs Docker-in-Docker to run `moongate-server` prover service
 # Internally run on localhost:3000

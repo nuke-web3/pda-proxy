@@ -1,5 +1,21 @@
 # Verifiable Encryption
 
+<figure align="center">
+  <iframe
+    width="560"
+    height="315"
+    src="https://www.youtube.com/embed/6P7yWZ4Cshs?si=RzSswRKxYD-gFa7T"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+  <figcaption>
+     May 2025 overview talk - <a href="https://hackmd.io/@Nuke/SyHBUsdWlg">Slides here</a>
+  </figcaption>
+</figure>
+
 ### _A New Primitive Empowering Private Data Availability_
 
 > “Don’t trust. Verify.”
@@ -64,7 +80,7 @@ In a world where chain data is globally replicated and indexed, **encryption at 
 
 - **PDA as a database** for collaborative dApps with fine-grained access control.
 - **Private rollups** with programmable cryptography, enabling [obfuscated state](https://0xparc.org/blog/programmable-cryptography-1).
-- **Private bridging and escrow** sending verifibly correctm but private messages around web2 and/or web3 apps.
+- **Private bridging and escrow** sending verifiably correct but private messages around web2 and/or web3 apps.
 - **Drop-in support** for existing DA users via a [proxy service](../README.md), simplifying migration to PDA.
 
 ### _Trustless Data Markets_
@@ -76,7 +92,7 @@ Here is a [diagram inspired by them](https://docs.google.com/presentation/d/1qq1
 
 ```mermaid
 flowchart LR
-    Data["Data to be Sold"] --> zkVM_Algo["zkVM(tranform media)"]
+    Data["Data to be Sold"] --> zkVM_Algo["zkVM(transform media)"]
     zkVM_Algo -- "proven data transform w/ VE anchor" --> Contract["Marketplace on <dApp chain>"]
     Data -- "VE data" --> Celestia["Celestia"]
     Celestia -- "header" --> Blobstream["Blobstream on <dApp chain>"]
@@ -85,7 +101,7 @@ flowchart LR
 
 ### _Verifiable Private Backups_
 
-> NOTE: Celestia does _not_ guarantee that data will be avalible forever!
+> NOTE: Celestia does _not_ guarantee that data will be available forever!
 > See [the docs on retrievability](https://docs.celestia.org/learn/retrievability#data-retrievability-and-pruning-in-celestia-node) for the latest safe assumptions to use.
 
 With PDA, sensitive data can be publicly published in encrypted form, with **predefined methods for recovery** - without revealing its contents.
