@@ -53,8 +53,9 @@ COPY . .
 RUN --mount=type=cache,id=target_cache,target=/app/target \
   RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" /root/.sp1/bin/cargo-prove prove build -p chacha-program
 # Build the final binary
+# NOTE: default feature is to use --docker ELF
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  cargo build --release && \
+  cargo build --release --no-default-features && \
   strip /app/target/release/pda-proxy && \
   cp target/release/pda-proxy /app/pda-proxy # pop out of cache
 
