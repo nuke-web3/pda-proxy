@@ -17,7 +17,7 @@ use rustls::ServerConfig;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sp1_sdk::SP1ProofWithPublicValues;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
     net::TcpListener,
     sync::{OnceCell, mpsc},
@@ -96,17 +96,22 @@ async fn main() -> Result<()> {
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();
-    
-    // Load SP1 network timeout configuration from environment
-    let sp1_network_timeout_secs = std::env::var("SP1_NETWORK_TIMEOUT_SECS")
-        .unwrap_or_else(|_| "300".to_string()) // Default to 5 minutes
-        .parse::<u64>()
-        .expect("SP1_NETWORK_TIMEOUT_SECS must be a valid number");
-    
-    info!("SP1 network timeout configured to {} seconds", sp1_network_timeout_secs);
-    
+
+    let zk_proof_gen_timeout_remote = Duration::from_secs(
+        std::env::var("PROOF_GEN_TIMEOUT_SECONDS_REMOTE")
+            .expect("PROOF_GEN_TIMEOUT_SECONDS_REMOTE env var required")
+            .parse()
+            .expect("PROOF_GEN_TIMEOUT_SECONDS_REMOTE must be integer"),
+    );
+    info!(
+        "Prover network proof generation timeout configured to {} seconds (permanent failure, and new request needed if hit)",
+        zk_proof_gen_timeout_remote.as_secs()
+    );
+
     let pda_runner = Arc::new(PdaRunner::new(
-        PdaRunnerConfig { sp1_network_timeout_secs },
+        PdaRunnerConfig {
+            zk_proof_gen_timeout_remote,
+        },
         OnceCell::new(),
         OnceCell::new(),
         config_db.clone(),

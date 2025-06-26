@@ -9,7 +9,7 @@ use sp1_sdk::{
     SP1Stdin,
     network::{Error as SP1NetworkError, FulfillmentStrategy},
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{OnceCell, mpsc};
 
 /// Hardcoded ELF binary for the crate `program-keccak-inclusion`
@@ -42,8 +42,8 @@ static CHACHA_SETUP: OnceCell<Arc<SP1ProofSetup>> = OnceCell::const_new();
 
 /// Configuration for the PDA Runner
 pub struct PdaRunnerConfig {
-    /// Timeout in seconds for SP1 network proof requests
-    pub sp1_network_timeout_secs: u64,
+    /// Timeout in seconds for prover network proof requests
+    pub zk_proof_gen_timeout_remote: Duration,
 }
 
 /// The main service runner.
@@ -249,18 +249,14 @@ impl PdaRunner {
                         }
                         Err(e) => {
                             error!("{job:?} failed to request a proof: {e}");
-                            job_status = JobStatus::Failed(
-                                e,
-                                Some(JobStatus::RemoteZkProofRequesting.into()),
-                            );
-                            self.finalize_job(&job_key, job_status)?;
+                            // NOTE: we internally finalize the job in `handle_zk_client_error`
                         }
                     };
                     debug!("ZK proof request sent");
                 }
                 JobStatus::RemoteZkProofPending(zk_request_id) => {
                     debug!("ZK request waiting");
-                    match self.wait_for_zk_proof(&job_key, zk_request_id).await {
+                    match self.wait_for_zk_proof(&job, &job_key, zk_request_id).await {
                         Ok(zk_proof) => {
                             info!("🎉 {job:?} Finished!");
                             job_status = JobStatus::ZkProofFinished(zk_proof);
@@ -268,11 +264,7 @@ impl PdaRunner {
                         }
                         Err(e) => {
                             error!("{job:?} failed progressing RemoteZkProofPending: {e}");
-                            job_status = JobStatus::Failed(
-                                e,
-                                Some(JobStatus::RemoteZkProofPending(zk_request_id).into()),
-                            );
-                            self.finalize_job(&job_key, job_status)?;
+                            // NOTE: we internally finalize the job in `handle_zk_client_error`
                         }
                     }
                     debug!("Remote ZK request fulfilled, result stored in DB");
@@ -289,14 +281,8 @@ impl PdaRunner {
                             self.finalize_job(&job_key, job_status)?;
                         }
                         Err(e) => {
-                            error!(
-                                "0x{} - Failed progressing LocalZkProofPending: {e}",
-                                hex::encode(&job_key)
-                            );
-                            job_status = JobStatus::Failed(
-                                e, None, // TODO: should this be retry-able?
-                            );
-                            self.finalize_job(&job_key, job_status)?;
+                            error!("{job:?} - Failed progressing LocalZkProofPending: {e}",);
+                            // NOTE: we internally finalize the job in `handle_zk_client_error`
                         }
                     };
                     debug!("0x{} - ZKP stored in finalized DB", hex::encode(job_key));
@@ -417,45 +403,42 @@ impl PdaRunner {
     fn handle_zk_client_error(
         &self,
         zk_client_error: &SP1NetworkError,
+        job: &Job,
         job_key: &[u8],
     ) -> PdaRunnerError {
         error!("SP1 Client error: {zk_client_error}");
         let (e, job_status);
         match zk_client_error {
             SP1NetworkError::SimulationFailed | SP1NetworkError::RequestUnexecutable { .. } => {
-                e = PdaRunnerError::DaClientError(format!(
-                    "ZKP program critical failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
-                    hex::encode(job_key)
+                e = PdaRunnerError::ZkClientError(format!(
+                    "ZKP program critical failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
                 ));
                 job_status = JobStatus::Failed(e.clone(), None);
             }
             SP1NetworkError::RequestUnfulfillable { .. } => {
-                e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
-                    hex::encode(job_key)
+                e = PdaRunnerError::ZkClientError(format!(
+                    "ZKP network failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
                 ));
                 job_status = JobStatus::Failed(e.clone(), None);
             }
-            SP1NetworkError::RequestTimedOut { request_id } => {
-                e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network: {zk_client_error} occurred for job 0x{}",
-                    hex::encode(job_key)
+            SP1NetworkError::RequestTimedOut { .. } => {
+                e = PdaRunnerError::ZkClientError(format!(
+                    "ZKP network: {zk_client_error} occurred for {job:?} - callback to start the job over"
                 ));
-                let id = request_id
-                    .as_slice()
-                    .try_into()
-                    .expect("request ID is always correct length");
+
+                // TODO: We cannot clone KeccakInclusionToDataRootProofInput thus we cannot insert into a JobStatus::DataAvailable(proof_input)
+                // So we just redo the work from scratch for the DA side as a stupid workaround
                 job_status =
-                    JobStatus::Failed(e.clone(), Some(JobStatus::RemoteZkProofPending(id).into()));
+                    JobStatus::Failed(e.clone(), Some(JobStatus::RemoteZkProofRequesting.into()));
             }
             SP1NetworkError::RpcError(_) | SP1NetworkError::Other(_) => {
-                e = PdaRunnerError::DaClientError(format!(
-                    "ZKP network failure: {zk_client_error} occurred for job 0x{} PLEASE REPORT!",
-                    hex::encode(job_key)
+                e = PdaRunnerError::ZkClientError(format!(
+                    "ZKP network failure: {zk_client_error} occurred for {job:?} PLEASE REPORT!"
                 ));
-                // TODO: We cannot clone thus we cannot insert into a JobStatus::...(proof_input)
+                // TODO: We cannot clone KeccakInclusionToDataRootProofInput thus we cannot insert into a JobStatus::DataAvailable(proof_input)
                 // So we just redo the work from scratch for the DA side as a stupid workaround
-                job_status = JobStatus::Failed(e.clone(), None);
+                job_status =
+                    JobStatus::Failed(e.clone(), Some(JobStatus::RemoteZkProofRequesting.into()));
             }
         }
         match self.finalize_job(job_key, job_status) {
@@ -504,8 +487,9 @@ impl PdaRunner {
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
             .map_err(|e| {
                 if let Some(down) = e.downcast_ref::<SP1NetworkError>() {
-                    return self.handle_zk_client_error(down, job_key);
+                    return self.handle_zk_client_error(down, job, job_key);
                 }
+                error!("Unhandled Error: {e:?}");
                 PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?;
         debug!("0x{} - Proof complete", hex::encode(job_key));
@@ -556,13 +540,13 @@ impl PdaRunner {
             .strategy(strategy)
             .groth16()
             .skip_simulation(false)
-            .timeout(std::time::Duration::from_secs(self.config.sp1_network_timeout_secs))
+            .timeout(self.config.zk_proof_gen_timeout_remote) // Time allowed for provers to *attempt* a job, or it permanently fails.
             .request_async()
             .await
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
             .map_err(|e| {
                 if let Some(down) = e.downcast_ref::<SP1NetworkError>() {
-                    return self.handle_zk_client_error(down, job_key);
+                    return self.handle_zk_client_error(down, job, job_key);
                 }
                 PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?
@@ -578,31 +562,28 @@ impl PdaRunner {
     /// Await a proof request from Succinct's prover network
     async fn wait_for_zk_proof(
         &self,
+        job: &Job,
         job_key: &[u8],
         request_id: util::SuccNetJobId,
     ) -> Result<SP1ProofWithPublicValues, PdaRunnerError> {
-        debug!("Waiting for proof from prover network with timeout: {} seconds", self.config.sp1_network_timeout_secs);
+        debug!(
+            "Waiting for proof from prover network with timeout: {} seconds",
+            self.config.zk_proof_gen_timeout_remote.as_secs()
+        );
+        debug!("Waiting for proof from prover network");
         let zk_client_handle = self.get_zk_client_remote().await;
 
         let proof = zk_client_handle
-            .wait_proof(request_id.into(), Some(std::time::Duration::from_secs(self.config.sp1_network_timeout_secs)))
+            .wait_proof(request_id.into(), None)
             .await
             .map_err(|e| {
-                error!("UNHANDLED ZK client error: {e:?}");
-                let e = PdaRunnerError::ZkClientError(
-                    "UNKNOWN ZK client error. PLEASE REPORT!".to_string(),
-                );
-                match self.finalize_job(
-                    job_key,
-                    JobStatus::Failed(
-                        e.clone(),
-                        Some(JobStatus::RemoteZkProofPending(request_id).into()),
-                    ),
-                ) {
-                    Ok(_) => e,
-                    Err(internal_err) => internal_err,
+                if let Some(down) = e.downcast_ref::<SP1NetworkError>() {
+                    return self.handle_zk_client_error(down, job, job_key);
                 }
+                error!("UNHANDLED ZK client error: {e:?}");
+                PdaRunnerError::ZkClientError(format!("Unhandled Error: {e} PLEASE REPORT"))
             })?;
+
         Ok(proof)
     }
 
