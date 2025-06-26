@@ -96,8 +96,17 @@ async fn main() -> Result<()> {
 
     info!("Building clients and service setup");
     let (job_sender, job_receiver) = mpsc::unbounded_channel::<Option<Job>>();
+    
+    // Load SP1 network timeout configuration from environment
+    let sp1_network_timeout_secs = std::env::var("SP1_NETWORK_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "300".to_string()) // Default to 5 minutes
+        .parse::<u64>()
+        .expect("SP1_NETWORK_TIMEOUT_SECS must be a valid number");
+    
+    info!("SP1 network timeout configured to {} seconds", sp1_network_timeout_secs);
+    
     let pda_runner = Arc::new(PdaRunner::new(
-        PdaRunnerConfig {},
+        PdaRunnerConfig { sp1_network_timeout_secs },
         OnceCell::new(),
         OnceCell::new(),
         config_db.clone(),

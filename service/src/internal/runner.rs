@@ -40,12 +40,14 @@ pub async fn get_program_id() -> SuccNetProgramId {
 
 static CHACHA_SETUP: OnceCell<Arc<SP1ProofSetup>> = OnceCell::const_new();
 
-/// TODO: setup ability to config as needed
-pub struct PdaRunnerConfig {}
+/// Configuration for the PDA Runner
+pub struct PdaRunnerConfig {
+    /// Timeout in seconds for SP1 network proof requests
+    pub sp1_network_timeout_secs: u64,
+}
 
 /// The main service runner.
 pub struct PdaRunner {
-    #[allow(dead_code)] // TODO: use config
     pub config: PdaRunnerConfig,
     pub config_db: SledTree,
     pub queue_db: SledTree,
@@ -554,7 +556,7 @@ impl PdaRunner {
             .strategy(strategy)
             .groth16()
             .skip_simulation(false)
-            // .timeout(std::time::Duration::from_secs(60))
+            .timeout(std::time::Duration::from_secs(self.config.sp1_network_timeout_secs))
             .request_async()
             .await
             // TODO: how to handle errors without a concrete type? Anyhow is not the right thing for us...
@@ -579,11 +581,11 @@ impl PdaRunner {
         job_key: &[u8],
         request_id: util::SuccNetJobId,
     ) -> Result<SP1ProofWithPublicValues, PdaRunnerError> {
-        debug!("Waiting for proof from prover network");
+        debug!("Waiting for proof from prover network with timeout: {} seconds", self.config.sp1_network_timeout_secs);
         let zk_client_handle = self.get_zk_client_remote().await;
 
         let proof = zk_client_handle
-            .wait_proof(request_id.into(), None)
+            .wait_proof(request_id.into(), Some(std::time::Duration::from_secs(self.config.sp1_network_timeout_secs)))
             .await
             .map_err(|e| {
                 error!("UNHANDLED ZK client error: {e:?}");
