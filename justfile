@@ -51,7 +51,11 @@ run-debug *FLAGS: _pre-build _pre-run
 
 # Build docker image & tag
 docker-build:
-    DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
+    DOCKER_BUILDKIT=1 docker build \
+      --build-arg BUILDKIT_INLINE_CACHE=1 \
+      --tag "$DOCKER_CONTAINER_NAME" \
+      --progress=plain \
+      .
 
 # Save docker image to a tar.gz
 docker-save:

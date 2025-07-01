@@ -2,9 +2,9 @@
 FROM nvidia/cuda:12.9.1-devel-ubuntu24.04 AS base-dev
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
-  apt-get install --no-install-recommends -y \
-  clang libclang-dev docker.io curl tar build-essential pkg-config git ca-certificates gnupg2 \
-  && rm -rf /var/lib/apt/lists/*
+    apt-get install --no-install-recommends -y \
+    clang libclang-dev docker.io curl tar build-essential pkg-config git ca-certificates gnupg2 \
+    && rm -rf /var/lib/apt/lists/*
  
 ENV GO_VERSION=1.24.4
 ENV GO_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
@@ -26,7 +26,7 @@ RUN cargo install cargo-chef
 
 # https://docs.succinct.xyz/docs/sp1/getting-started/install
 RUN curl -L https://sp1up.succinct.xyz | bash && \
-  /root/.sp1/bin/sp1up
+    /root/.sp1/bin/sp1up
 
 ####################################################################################################
 FROM base-dev AS planner
@@ -44,20 +44,20 @@ WORKDIR /app
 COPY --from=planner /app/recipe.json ./
 
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  cargo chef cook --release --recipe-path recipe.json
+    cargo chef cook --release --recipe-path recipe.json
 
 COPY . .
 
 # Build SP1 ELF to be proven (with optimizations)
-# TODO: need to use `cargo prove --docker` for repoducible builds?
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes" /root/.sp1/bin/cargo-prove prove build -p chacha-program
+    RUSTFLAGS="-Copt-level=3 -Clto=fat -Ccodegen-units=1 -Cdebuginfo=1 -Cembed-bitcode=yes"\
+    /root/.sp1/bin/cargo-prove prove build --docker -p chacha-program
 # Build the final binary
 # NOTE: default feature is to use --docker ELF
 RUN --mount=type=cache,id=target_cache,target=/app/target \
-  cargo build --release --no-default-features && \
-  strip /app/target/release/pda-proxy && \
-  cp target/release/pda-proxy /app/pda-proxy # pop out of cache
+    cargo build --release && \
+    strip /app/target/release/pda-proxy && \
+    cp target/release/pda-proxy /app/pda-proxy # pop out of cache
 
 ####################################################################################################
 FROM nvidia/cuda:12.9.1-base-ubuntu24.04 AS runtime
