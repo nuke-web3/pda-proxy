@@ -51,7 +51,11 @@ run-debug *FLAGS: _pre-build _pre-run
 
 # Build docker image & tag
 docker-build:
-    DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_INLINE_CACHE=1 --tag "$DOCKER_CONTAINER_NAME" --progress=plain .
+    DOCKER_BUILDKIT=1 docker build \
+      --build-arg BUILDKIT_INLINE_CACHE=1 \
+      --tag "$DOCKER_CONTAINER_NAME" \
+      --progress=plain \
+      .
 
 # Save docker image to a tar.gz
 docker-save:
@@ -70,13 +74,15 @@ docker-run:
     docker run --rm -it \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v ./service/static:/app/static \
+      -v $HOME/.sp1/circuits:/root/.sp1/circuits \
       -v $PDA_DB_PATH:$PDA_DB_PATH \
       --env-file {{ env-settings }} \
-      --env TLS_CERTS_PATH=/app/static/sample.pem --env TLS_KEY_PATH=/app/static/sample.rsa \
+      --env TLS_CERTS_PATH=/app/static/sample.pem \
+      --env TLS_KEY_PATH=/app/static/sample.rsa \
       --env RUST_LOG=pda_proxy=debug \
       --network=host \
       -p $PDA_PORT:$PDA_PORT \
-      "$DOCKER_CONTAINER_NAME"
+      $DOCKER_CONTAINER_NAME
 
 # Build in debug mode, no optimizations
 build-debug: _pre-build
