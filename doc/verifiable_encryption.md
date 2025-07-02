@@ -2,11 +2,11 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=6P7yWZ4Cshs">
-  <img src="https://img.youtube.com/vi/6P7yWZ4Cshs/0.jpg" alt="VE May 2025 overview talk on YouTube"/>
+    <img src="./assets/video-thumbnail.jpg" alt="VE May 2025 overview talk on YouTube" width="50%" />
   </a>
-  <p align="center">
-  ^^^ May 2025 overview talk - <a href="https://hackmd.io/@Nuke/SyHBUsdWlg">Slides here</a> ^^^
-  </p>
+</p>
+<p align="center">
+  ^^^<strong>May 2025 overview talk</strong> – <a href="https://hackmd.io/@Nuke/SyHBUsdWlg">Slides here</a> ^^^
 </p>
 
 ### _A New Primitive Empowering Private Data Availability_
