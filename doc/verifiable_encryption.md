@@ -1,20 +1,13 @@
-# Verifiable Encryption
+<h1 align="center"> Verifiable Encryption</h1>
 
-<figure align="center">
-  <iframe
-    width="560"
-    height="315"
-    src="https://www.youtube.com/embed/6P7yWZ4Cshs?si=RzSswRKxYD-gFa7T"
-    title="YouTube video player"
-    frameborder="0"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    referrerpolicy="strict-origin-when-cross-origin"
-    allowfullscreen>
-  </iframe>
-  <figcaption>
-     May 2025 overview talk - <a href="https://hackmd.io/@Nuke/SyHBUsdWlg">Slides here</a>
-  </figcaption>
-</figure>
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=6P7yWZ4Cshs">
+  <img src="https://img.youtube.com/vi/6P7yWZ4Cshs/0.jpg" alt="VE May 2025 overview talk on YouTube"/>
+  </a>
+  <p align="center">
+  ^^^ May 2025 overview talk - <a href="https://hackmd.io/@Nuke/SyHBUsdWlg">Slides here</a> ^^^
+  </p>
+</p>
 
 ### _A New Primitive Empowering Private Data Availability_
 
